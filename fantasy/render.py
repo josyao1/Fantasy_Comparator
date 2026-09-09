@@ -296,8 +296,9 @@ def sms_text(table: dict[str, Exposure], week: int, wave, matchups) -> str:
         stake = "EVEN" if e.net == 0 else f"{e.net:+d}"
         lines.append(f"! {e.player.name.split()[-1]} {stake}")
     errs = [m for m in matchups if m.error]
-    if errs:
-        lines.append(f"{len(errs)} league(s) failed")
+    for m in errs:
+        why = "AUTH" if "sign-in" in m.error or "private" in m.error else "FAIL"
+        lines.append(f"[{why}] {m.league_name}")
     if config.BOARD_BASE_URL:
         lines.append(config.BOARD_BASE_URL)
     return "\n".join(lines)

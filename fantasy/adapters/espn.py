@@ -16,13 +16,29 @@ from ..models import LeagueMatchup, Player
 
 BASE = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons"
 PROTEAMS_CACHE = config.DATA / "espn_proteams.json"
+NAMES_CACHE = config.DATA / "espn_league_names.json"
 
 POSITIONS = {1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DST"}
 BENCH_SLOTS = {20, 21}
 
 
-class ESPNAuthError(RuntimeError):
-    pass
+def _names() -> dict:
+    if NAMES_CACHE.exists():
+        try:
+            return json.loads(NAMES_CACHE.read_text())
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _remember_name(league_id: str, name: str) -> None:
+    """Keep the last known league name so auth failures stay readable."""
+    known = _names()
+    if known.get(league_id) == name:
+        return
+    known[league_id] = name
+    config.DATA.mkdir(parents=True, exist_ok=True)
+    NAMES_CACHE.write_text(json.dumps(known, indent=2, sort_keys=True))
 
 
 def _proteams() -> dict[int, str]:
@@ -47,7 +63,7 @@ def fetch(spec: str, week: int, season: str, priority: int) -> LeagueMatchup:
     matchup = LeagueMatchup(
         platform="espn",
         league_id=league_id,
-        league_name=f"ESPN {league_id}",
+        league_name=_names().get(league_id, f"ESPN {league_id}"),
         priority=priority,
         my_team="",
         opp_team="",
@@ -71,7 +87,10 @@ def fetch(spec: str, week: int, season: str, priority: int) -> LeagueMatchup:
     r.raise_for_status()
     data = r.json()
 
-    matchup.league_name = (data.get("settings") or {}).get("name") or f"ESPN {league_id}"
+    name = (data.get("settings") or {}).get("name")
+    if name:
+        matchup.league_name = name
+        _remember_name(league_id, name)
     teams = {t["id"]: t for t in data.get("teams", [])}
     proteams = _proteams()
 

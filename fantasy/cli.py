@@ -17,6 +17,13 @@ from .adapters import espn, sleeper
 from .models import LeagueMatchup
 
 
+def _waves(season: str, week: int):
+    """Alert cadence: one send per game day, or one per kickoff wave."""
+    if config.SEND_MODE == "wave":
+        return schedule.waves_for_week(season, week)
+    return schedule.day_waves(season, week)
+
+
 def collect(week: int, season: str) -> list[LeagueMatchup]:
     """Fetch every configured league. One league failing never kills the run."""
     out: list[LeagueMatchup] = []
@@ -67,18 +74,18 @@ def main(argv=None) -> int:
     week, season = schedule.current_week()
 
     if args.command == "schedule":
-        for w in schedule.waves_for_week(season, week):
+        for w in _waves(season, week):
             fire = w.fire_at(config.LEAD_MINUTES).astimezone(schedule.ET)
             print(f"{w.label:14s} {len(w.games):2d}g  fire {fire:%a %-I:%M%p}  {w.key}")
         return 0
 
     wave = None
     if args.as_of:
-        upcoming = [w for w in schedule.waves_for_week(season, week) if w.kickoff_dt > now]
+        upcoming = [w for w in _waves(season, week) if w.kickoff_dt > now]
         wave = upcoming[0] if upcoming else None
     if args.command == "run" and not args.force:
         sent = state.load()
-        waves = schedule.waves_for_week(season, week)
+        waves = _waves(season, week)
         wave = schedule.due_wave(waves, now, config.LEAD_MINUTES, sent)
         if wave is None:
             print("no wave due — exiting")

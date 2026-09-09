@@ -62,7 +62,10 @@ class Wave:
     @property
     def label(self) -> str:
         local = self.kickoff_dt.astimezone(ET)
-        return f"{local:%a} {local:%-I:%M%p}".replace("AM", "am").replace("PM", "pm")
+        base = f"{local:%a} {local:%-I:%M%p}".replace("AM", "am").replace("PM", "pm")
+        if len({g.kickoff for g in self.games}) > 1:
+            return f"{local:%a} · {len(self.games)} games"
+        return base
 
     def fire_at(self, lead_minutes: int) -> datetime:
         return self.kickoff_dt - timedelta(minutes=lead_minutes)
@@ -146,6 +149,24 @@ def waves_for_week(season: str, week: int, force: bool = False) -> list[Wave]:
         Wave(kickoff=k, games=tuple(grouped[k]))
         for k in sorted(grouped, key=lambda x: datetime.fromisoformat(x))
     ]
+
+
+def day_waves(season: str, week: int, force: bool = False) -> list[Wave]:
+    """One wave per game DAY, anchored at that day's first kickoff.
+
+    Sunday has three kickoff waves but only one is worth a text: by the 1:00pm
+    send the whole day's opposing lineups are already visible, and the later
+    waves are still marked open on the board so late changes stay legible.
+    """
+    by_day: dict[str, list[Game]] = {}
+    for wave in waves_for_week(season, week, force=force):
+        day = wave.kickoff_dt.astimezone(ET).strftime("%Y-%m-%d")
+        by_day.setdefault(day, []).extend(wave.games)
+    out = []
+    for day in sorted(by_day):
+        games = sorted(by_day[day], key=lambda g: g.kickoff_dt)
+        out.append(Wave(kickoff=games[0].kickoff, games=tuple(games)))
+    return out
 
 
 def kickoff_by_team(season: str, week: int) -> dict[str, datetime]:

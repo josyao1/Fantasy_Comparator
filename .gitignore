@@ -10,3 +10,4 @@ out/*.html
 # Large / regenerated caches — but sent.json is real state and IS tracked
 data/sleeper_players.json
 data/schedule.json
+# league-name cache IS tracked so failures stay readable on a fresh CI checkout

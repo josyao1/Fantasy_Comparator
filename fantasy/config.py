@@ -46,3 +46,4 @@ BOARD_BASE_URL = os.environ.get("BOARD_BASE_URL", "").rstrip("/")
 
 LEAD_MINUTES = int(os.environ.get("LEAD_MINUTES", "90"))
 SEASON = os.environ.get('SEASON', '2026')
+SEND_MODE = os.environ.get("SEND_MODE", "daily")  # daily | wave
