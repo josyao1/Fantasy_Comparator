@@ -107,3 +107,45 @@ def test_late_run_still_fires_before_kickoff():
 
 def test_wave_expires_at_kickoff():
     assert schedule.due_wave([_wave(NOW - timedelta(minutes=1))], NOW, 90, set()) is None
+
+
+# ── injection ─────────────────────────────────────────────────────────────
+# League and team names come from the ESPN/Sleeper APIs, so they are written
+# by other members of the league and must be treated as untrusted input.
+from datetime import timezone as _tz
+
+from fantasy import render
+
+
+def _render_with_name(name: str, opp: str = "them") -> str:
+    m = LeagueMatchup("sleeper", "1", name, 0, "me", opp,
+                      my_starters=[CMC], opp_starters=[CHASE])
+    table = ledger.build([m], {}, NOW)
+    return render.board([m], table, 1, None, NOW)
+
+
+def test_script_breakout_in_league_name_is_neutralised():
+    evil = '</script><script>alert(1)</script>'
+    html = _render_with_name(evil)
+    # the raw closing tag must never appear inside the embedded JSON block
+    blob = html.split('<script id="meta" type="application/json">')[1].split("</script>")[0]
+    assert "</script" not in blob
+    assert "\\u003c" in blob
+
+
+def test_league_name_is_escaped_in_server_rendered_markup():
+    html = _render_with_name('<img src=x onerror=alert(1)>')
+    assert "<img src=x onerror" not in html
+    assert "&lt;img src=x onerror" in html
+
+
+def test_opponent_name_cannot_inject_markup():
+    html = _render_with_name("safe", opp='"><script>alert(1)</script>')
+    blob = html.split('<script id="meta" type="application/json">')[1].split("</script>")[0]
+    assert "</script" not in blob
+
+
+def test_client_side_grouping_never_uses_innerhtml_for_names():
+    # the group builder must construct DOM nodes, not concatenate markup
+    assert "innerHTML" not in render.JS.split("function group(")[1].split("return d;")[0]
+    assert "textContent" in render.JS
