@@ -104,6 +104,18 @@ body{margin:0;background:var(--ground);color:var(--ink);
 .plist > div{padding:2.5px 0}
 .plist .dim{opacity:.55}
 
+.wash-list{background:var(--surface);border:1px solid var(--rule-soft);
+  border-radius:3px;padding:4px 13px 9px;margin-top:9px}
+.wash-hd{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+  padding:8px 0 7px;border-bottom:1px solid var(--rule-soft);margin-bottom:5px}
+.wl{display:flex;flex-wrap:wrap;gap:2px 9px;align-items:baseline;padding:4px 0;font-size:13px}
+.wl.dim{opacity:.55}
+.wl .wn{font-weight:600}
+.wl .wp{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10px;
+  color:var(--faint);letter-spacing:.05em}
+.wl .wg{font-size:11.5px;color:var(--muted);flex-basis:100%}
+.wl .up{color:var(--for)} .wl .dn{color:var(--against)}
 .err{background:var(--warn-bg);border:1px solid var(--warn);border-left-width:3px;
   color:var(--warn);padding:10px 13px;border-radius:3px;margin-bottom:7px;font-size:13px}
 .empty{color:var(--faint);font-size:13.5px;padding:14px 0;font-style:italic}
@@ -228,7 +240,20 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
     if conf:
         parts.append('<p class="note">You start him and you face him. '
                      'Net is your true stake.</p>')
-        parts.append("".join(_row(e) for e in conf))
+        lopsided = [e for e in conf if e.net != 0]
+        even = [e for e in conf if e.net == 0]
+        parts.append("".join(_row(e) for e in lopsided))
+        if even:
+            parts.append('<div class="wash-list"><div class="wash-hd">'
+                         f'{len(even)} even &mdash; one lineup each way</div>')
+            for e in even:
+                parts.append(
+                    f'<div class="wl{" dim" if e.locked else ""}">'
+                    f'<span class="wn">{_esc(e.player.name)}</span>'
+                    f'<span class="wp">{_esc(e.player.position)} {_esc(e.player.team)}</span>'
+                    f'<span class="wg"><span class="up">&#9650;</span> {_esc(e.for_leagues[0])}'
+                    f' <span class="dn">&#9660;</span> {_esc(e.against_leagues[0])}</span></div>')
+            parts.append('</div>')
     else:
         parts.append('<div class="empty">Nobody you start is playing against you.</div>')
     parts.append('</div>')

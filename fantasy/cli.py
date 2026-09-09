@@ -54,9 +54,16 @@ def main(argv=None) -> int:
     ap.add_argument("command", choices=["scan", "run", "schedule"])
     ap.add_argument("--force", action="store_true", help="ignore wave timing and dedup")
     ap.add_argument("--dry-run", action="store_true", help="build but do not send")
+    ap.add_argument("--as-of", metavar="ISO",
+                    help="pretend it is this UTC time — previews lock state for a "
+                         "future wave, e.g. 2026-09-13T15:30")
     args = ap.parse_args(argv)
 
     now = datetime.now(timezone.utc)
+    if args.as_of:
+        now = datetime.fromisoformat(args.as_of)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
     week, season = schedule.current_week()
 
     if args.command == "schedule":
@@ -66,6 +73,9 @@ def main(argv=None) -> int:
         return 0
 
     wave = None
+    if args.as_of:
+        upcoming = [w for w in schedule.waves_for_week(season, week) if w.kickoff_dt > now]
+        wave = upcoming[0] if upcoming else None
     if args.command == "run" and not args.force:
         sent = state.load()
         waves = schedule.waves_for_week(season, week)

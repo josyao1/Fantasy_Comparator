@@ -44,9 +44,11 @@ def build(matchups: list[LeagueMatchup], kickoffs: dict[str, datetime],
 
 def conflicts(table: dict[str, Exposure]) -> list[Exposure]:
     """Players you start AND face — sorted by how badly you're underwater."""
+    # A wash is the least actionable row on the board, so lopsided stakes
+    # sort first (most underwater leading), and even ones trail.
     return sorted(
         (e for e in table.values() if e.is_conflict),
-        key=lambda e: (e.net, -len(e.against_leagues)),
+        key=lambda e: (e.net == 0, e.net, -len(e.against_leagues)),
     )
 
 
