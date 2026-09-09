@@ -92,7 +92,10 @@ jobs:
           # token from it, and pin the CLI so a bad release cannot be pulled in
           # silently by `latest`.
           GITHUB_TOKEN: ""
-        run: npx --yes vercel@59.13.1 deploy out --prod --yes --token "$VERCEL_TOKEN"
+        run: |
+          deployment_url="$(npx --yes vercel@59.13.1 deploy out --prod --yes --token "$VERCEL_TOKEN")"
+          npx --yes vercel@59.13.1 alias set "$deployment_url" fantasy-comparator.vercel.app \
+            --token "$VERCEL_TOKEN"
 
       - name: Persist dedup state
         if: github.event_name != 'push'

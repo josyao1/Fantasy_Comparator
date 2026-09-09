@@ -145,7 +145,9 @@ gh run watch
 Pushes to `main` that change the app, team-colour data, dependencies, or this
 workflow also rebuild and deploy the production board. Push-triggered scans
 always use `--force --dry-run`: they refresh Vercel immediately but never send
-a notification or alter dedup state.
+a notification or alter dedup state. The publish step explicitly assigns the
+`fantasy-comparator.vercel.app` alias so Vercel cannot leave the public URL on
+an older build when a project has branch-specific alias settings.
 
 Two Actions caveats: scheduled runs can be delayed 5-15 minutes under load,
 which is why a wave stays eligible from `kickoff - LEAD_MINUTES` right up to
