@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fantasy import ledger, schedule
 from fantasy.cli import _next_poll
 from fantasy.crosswalk import normalize_team, player_key
+from fantasy.leagues import assign as assign_leagues
 from fantasy.models import LeagueMatchup, Player
 
 UTC = timezone.utc
@@ -29,6 +30,17 @@ def test_suffix_and_punctuation_folding():
 def test_same_name_different_player_stays_distinct():
     # Two active Warrens; collapsing them would invent a phantom exposure.
     assert player_key("Jaylen Warren", "RB", "PIT") != player_key("Tyler Warren", "TE", "IND")
+
+
+def test_known_league_labels_and_colours_are_fixed():
+    names = ["Nueva Fantasy Football League", "NU FF", "Substation",
+             "IXL Fantasy Football", "IXL Champions League ‘26 - Kiwi"]
+    assigned = assign_leagues(names)
+    assert assigned["Nueva Fantasy Football League"] == {"code": "N", "color": "#3B82F6"}
+    assert assigned["NU FF"] == {"code": "N", "color": "#A855F7"}
+    assert assigned["Substation"] == {"code": "SF", "color": "#EF4444"}
+    assert assigned["IXL Fantasy Football"] == {"code": "IXL", "color": "#A16207"}
+    assert assigned["IXL Champions League ‘26 - Kiwi"] == {"code": "CL", "color": "#FBBF24"}
 
 
 def _matchup(name, mine, theirs, priority=0):
@@ -164,11 +176,18 @@ def test_board_has_clear_relationship_labels_and_controls():
     assert '<span class="stake-kind for">Start</span>' in html
     assert '<span class="stake-kind against">Against</span>' in html
     assert '<button data-theme=' not in html
-    assert 'data-filter="open"' in html
-    assert 'data-sort="time"' in html
+    assert '<option value="open">Open</option>' in html
+    assert '<option value="time">Kickoff</option>' in html
     assert 'data-league-check="safe"' in html
-    assert '<span class="opp">vs them</span>' in html
+    assert '<span class="opp">vs them</span>' not in html
+    assert "safe — vs them" in html  # still available in the expanded explanation
     assert 'aria-expanded="false"' in html
+    assert "data-thin-check" in html
+    assert 'data-short="C. McCaffrey"' in html
+    assert 'data-view-select' in html
+    assert 'data-sort-select' in html
+    assert 'data-filter-select' in html
+    assert '<div class="meaning">' not in html
 
 
 def test_derived_views_always_rebuild_from_immutable_cards():
@@ -182,6 +201,59 @@ def test_derived_views_always_rebuild_from_immutable_cards():
 
 def test_league_toggles_recompute_exposure_instead_of_only_hiding_cards():
     assert "function prepareCard" in render.JS
-    assert 'card.dataset.tier = conflict ? "divided"' in render.JS
+    assert 'card.dataset.tier = against.length >= 2 ? "multi" : "single"' in render.JS
+    assert 'if(scope === "cheer") card.dataset.tier = mine.length >= 2' in render.JS
     assert "card.dataset.exp = against.length" in render.JS
     assert "updateSummary(effective)" in render.JS
+
+
+def test_board_has_three_player_scopes_and_owned_only_source_cards():
+    html = _render_with_name("safe")
+    assert 'data-scope="against"' in html
+    assert 'data-scope="cheer"' in html
+    assert 'data-scope="overlap"' in html
+    source = html.split('<template id="card-source">')[1].split("</template>")[0]
+    # CMC is only on our lineup in this fixture, but the Cheer view still needs him.
+    assert 'data-name="Christian McCaffrey"' in source
+    assert 'data-name="Ja&#x27;Marr Chase"' in source
+    assert "function belongs" in render.JS
+
+
+def test_board_has_all_32_persistent_nfl_team_filters():
+    html = _render_with_name("safe")
+    assert html.count("data-team-check=") == 32
+    assert 'data-team-check="ARI"' in html
+    assert 'data-team-check="WAS"' in html
+    assert 'data-teams="all"' in html
+    assert 'data-teams="none"' in html
+    assert '"fm-hidden-teams"' in render.JS
+
+
+def test_overlap_badge_is_recomputed_after_league_filters():
+    assert 'card.dataset.overlap = conflict ? "1" : "0"' in render.JS
+    assert 'card.classList.toggle("has-overlap", conflict)' in render.JS
+    assert "badge.hidden = !conflict" in render.JS
+    assert ".overlap-badge[hidden]{display:none!important}" in render.CSS
+
+
+def test_divided_players_are_only_separated_in_the_divided_scope():
+    html = _render_with_name("safe")
+    stage = html.split('<div id="stage">')[1].split('<template id="card-source">')[0]
+    assert "<h2>Divided" not in stage
+    assert '>Divided<small>' in html
+    against_tiers = render.JS.split('else tiers = [')[1].split('];')[0]
+    cheer_tiers = render.JS.split('if(scope === "cheer") tiers = [')[1].split('];')[0]
+    assert '"divided"' not in against_tiers
+    assert '"divided"' not in cheer_tiers
+    against_summary = render.JS.split('} else {')[2].split('var open =')[0]
+    assert 'firstLabel = "overlaps"' not in against_summary
+
+
+def test_thin_mode_is_persistent_and_disables_card_dropdowns():
+    assert 'localStorage.getItem("fm-thin-mode")' in render.JS
+    assert 'localStorage.setItem("fm-thin-mode"' in render.JS
+    assert 'document.body.classList.contains("thin")' in render.JS
+    assert "body.thin .chev,body.thin .detail{display:none!important}" in render.CSS
+    assert "body.thin .stake-kind{display:none}" in render.CSS
+    assert 'body.thin .card.has-overlap .stake-row:has(.stake-kind.for) .chip:after{content:"✓"' in render.CSS
+    assert 'body.thin .card.has-overlap .stake-row:has(.stake-kind.against) .chip:after{content:"×"' in render.CSS

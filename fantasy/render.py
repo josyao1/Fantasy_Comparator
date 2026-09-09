@@ -28,6 +28,12 @@ from .models import Exposure, LeagueMatchup
 DISPLAY_TZ = ZoneInfo(config.DISPLAY_TIMEZONE)
 
 LEAGUES: dict[str, dict] = {}
+NFL_TEAMS = (
+    "ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE",
+    "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
+    "LV", "LAC", "LAR", "MIA", "MIN", "NE", "NO", "NYG",
+    "NYJ", "PHI", "PIT", "SEA", "SF", "TB", "TEN", "WAS",
+)
 
 CSS = """
 :root{
@@ -173,6 +179,12 @@ button{font:inherit}.wrap{width:100%;padding:0 max(14px,env(safe-area-inset-left
   font-size:11px;line-height:1;font-weight:800;letter-spacing:.06em;white-space:nowrap}
 .stake-kind.for{color:var(--for);border:1px solid var(--for);background:transparent}
 .stake-kind.against{color:var(--bg);border:1px solid var(--against);background:var(--against)}
+.scope-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:13px 0 0}
+.scope-tabs button{min-width:0;min-height:42px;padding:6px 5px;border:1px solid var(--rule);
+  border-radius:var(--radius);background:var(--surface);color:var(--mut);cursor:pointer;
+  font:800 13px/1.05 var(--display)}
+.scope-tabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.scope-tabs small{display:block;margin-top:3px;font:700 9px/1 var(--mono);letter-spacing:.03em}
 .legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:9px 0 4px}
 .legend-title{margin-top:13px;font:750 12px/1.3 var(--mono);letter-spacing:.07em;
   text-transform:uppercase;color:var(--faint)}
@@ -183,8 +195,15 @@ button{font:inherit}.wrap{width:100%;padding:0 max(14px,env(safe-area-inset-left
 .lgd input{width:18px;height:18px;flex:none;margin:0;accent-color:var(--lc);cursor:pointer}
 .lgd .code{font:800 11px/1 var(--mono);letter-spacing:.05em}.lgd .vs{min-width:0;font-size:12px;color:var(--mut);
   max-width:none;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-.controls{position:relative;margin:10px -5px 0;padding:7px 5px 9px;
-  max-width:calc(100% + 10px);background:var(--bg);border-bottom:1px solid var(--rule)}
+.controls{position:relative;margin:7px 0 0;padding:0 0 10px;background:var(--bg);border-bottom:1px solid var(--rule)}
+.control-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:5px;padding:7px;
+  border:1px solid var(--rule);border-radius:var(--radius);background:var(--surface)}
+.select-control{display:block;min-width:0}.select-control>span{display:block;margin:0 0 4px;
+  color:var(--faint);font:750 9px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase}
+.select-control select{width:100%;height:32px;padding:0 23px 0 8px;border:1px solid var(--rule);
+  border-radius:var(--radius);background:var(--bg);color:var(--ink);cursor:pointer;
+  font:750 12px/1 var(--display)}
+.select-control select:focus-visible{outline:3px solid var(--for);outline-offset:1px}
 .bar{display:grid;grid-template-columns:55px minmax(0,1fr);gap:7px;align-items:start;padding:3px 0;min-width:0}
 .bar .cap{font-size:11px;line-height:44px;font-weight:750;letter-spacing:.08em;color:var(--faint);margin:0}
 .choices{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0;max-width:100%}
@@ -192,6 +211,36 @@ button{font:inherit}.wrap{width:100%;padding:0 max(14px,env(safe-area-inset-left
   border-color:var(--rule);border-radius:var(--radius);font-family:var(--display);
   font-size:13px;line-height:1;font-weight:750;letter-spacing:.025em;text-transform:none}
 .bar button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.filter-drawers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:5px}
+.filter-drawer{border:1px solid var(--rule);border-radius:var(--radius);background:var(--surface)}
+.filter-drawer[open]{grid-column:1/-1}
+.filter-drawer summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:38px;padding:7px 10px;
+  cursor:pointer;color:var(--ink);font:800 13px/1 var(--display);list-style-position:inside}
+.filter-drawer summary span{margin-left:auto;color:var(--faint);font:700 9px/1 var(--mono);white-space:nowrap}
+.filter-drawer[open] summary{border-bottom:1px solid var(--rule)}
+.league-filter .legend{display:flex;align-items:center;gap:5px;padding:7px;flex-wrap:wrap}
+.league-filter .lgd{min-height:30px;padding:5px 8px 5px 6px;gap:5px;flex:1 1 62px;
+  justify-content:center;background:var(--bg);border-left-width:3px}
+.league-filter .lgd input{width:15px;height:15px}
+.league-filter .lgd .code{font-size:10px}
+.team-tools{display:flex;gap:6px;padding:8px 8px 3px}
+.team-tools button{min-height:32px;padding:5px 10px;border:1px solid var(--rule);border-radius:var(--radius);
+  background:var(--surface2);color:var(--mut);cursor:pointer;font:750 12px/1 var(--display)}
+.team-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;padding:6px 8px 9px}
+.team-choice{position:relative;min-width:0}.team-choice input{position:absolute;opacity:0;pointer-events:none}
+.team-choice span{display:flex;align-items:center;justify-content:center;min-height:30px;padding:3px 1px;
+  border:1px solid var(--rule);border-radius:2px;background:var(--bg);color:var(--faint);
+  cursor:pointer;font:750 10px/1 var(--mono)}
+.team-choice input:checked+span{border-color:var(--for);background:rgba(83,214,238,.12);color:var(--for)}
+.team-choice input:focus-visible+span{outline:3px solid var(--for);outline-offset:2px}
+.thin-toggle{position:relative;display:flex;align-items:flex-end;min-width:61px;cursor:pointer}
+.thin-toggle input{position:absolute;opacity:0;pointer-events:none}
+.thin-toggle span{display:flex;align-items:center;justify-content:center;width:100%;height:32px;padding:0 9px;
+  border:1px solid var(--rule);border-radius:var(--radius);background:var(--bg);color:var(--mut);
+  font:800 12px/1 var(--display)}
+.thin-toggle span:before{content:"↔";margin-right:5px;font-family:var(--mono)}
+.thin-toggle input:checked+span{border-color:var(--for);background:rgba(83,214,238,.12);color:var(--for)}
+.thin-toggle input:focus-visible+span{outline:3px solid var(--for);outline-offset:1px}
 button:focus-visible{outline:3px solid var(--for);outline-offset:2px}
 .grp{margin-top:25px}.grp>h2{align-items:center;margin-bottom:5px;font:750 13px/1.2 var(--mono);
   letter-spacing:.09em;color:var(--mut)}
@@ -213,6 +262,9 @@ button:focus-visible{outline:3px solid var(--for);outline-offset:2px}
   font-weight:650;letter-spacing:.025em;color:var(--mut);margin-top:4px}
 .lock{display:inline-flex;padding:3px 6px;border:1px solid var(--faint);border-radius:3px;
   color:var(--faint);font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.overlap-badge{display:inline-flex;padding:3px 6px;border:1px solid var(--accent);border-radius:3px;
+  color:var(--accent);font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.overlap-badge[hidden]{display:none!important}
 .side{display:grid;gap:3px;margin-top:6px}.stake-row{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0}
 .matchup-ref{display:inline-flex;align-items:center;gap:5px;min-width:0}
 .opp{max-width:15ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -228,6 +280,27 @@ button:focus-visible{outline:3px solid var(--for);outline-offset:2px}
 .detail{padding:12px 14px 14px;border-top:1px solid var(--rule);background:var(--surface2);
   color:var(--mut);font-size:14px;line-height:1.45}.detail[hidden]{display:none}.detail b{color:var(--ink)}
 .detail-row+.detail-row{margin-top:7px}
+body.thin .card{margin-bottom:3px}
+body.thin .card-main{grid-template-columns:32px minmax(0,1fr) auto;min-height:38px;cursor:default}
+body.thin .card .ph,body.thin .card .noph{min-height:38px;height:38px}
+body.thin .card .noph{font-size:13px}
+body.thin .card .body{display:flex;align-items:center;gap:5px;min-width:0;padding:4px 6px}
+body.thin .nm{flex:1;min-width:55px;font-size:0;line-height:1;white-space:nowrap}
+body.thin .nm:after{content:attr(data-short);font-size:16px}
+body.thin .mt{flex:none;margin:0}body.thin .mt>span:first-child{display:none}
+body.thin .lock,body.thin .overlap-badge{padding:2px 4px;font-size:8px}
+body.thin .side{display:flex;flex:none;gap:3px;margin:0;white-space:nowrap}
+body.thin .stake-row{flex-wrap:nowrap;gap:2px}
+body.thin .stake-kind{display:none}
+body.thin .chip,body.thin .chip.ghost{min-height:17px;padding:2px 4px;font-size:8.5px}
+body.thin .card.has-overlap .stake-row .chip{position:relative;margin-right:2px}
+body.thin .card.has-overlap .stake-row .chip:after{position:absolute;right:-4px;top:-5px;
+  display:flex;align-items:center;justify-content:center;width:10px;height:10px;border-radius:50%;
+  color:#fff;box-shadow:0 0 0 1px var(--surface);font:900 8px/1 var(--mono)}
+body.thin .card.has-overlap .stake-row:has(.stake-kind.for) .chip:after{content:"✓";background:#16A34A}
+body.thin .card.has-overlap .stake-row:has(.stake-kind.against) .chip:after{content:"×";background:#EF4444}
+body.thin .fig{min-width:36px;padding:4px 6px 4px 2px}body.thin .fg{font-size:18px}
+body.thin .fl{font-size:7px;margin-top:2px}body.thin .chev,body.thin .detail{display:none!important}
 .empty{color:var(--faint);font-size:14px;padding:15px;background:var(--surface);
   border:1px dashed var(--rule);border-radius:var(--radius);font-family:var(--body);font-style:normal}
 .err{font-size:14px;border-radius:var(--radius);font-family:var(--body)}
@@ -236,6 +309,8 @@ footer{font-size:12px;letter-spacing:.035em;color:var(--faint)}
   .wrap{padding-left:12px;padding-right:12px}.thesis{font-size:35px}.legend{grid-template-columns:1fr}
   .bar{grid-template-columns:48px 1fr}.bar button{padding-left:10px;padding-right:10px}
   .card-main{grid-template-columns:58px minmax(0,1fr) auto 22px}.nm{font-size:19px}.fg{font-size:24px}.fig{min-width:45px}
+  .control-strip{grid-template-columns:repeat(3,minmax(0,1fr)) 58px;padding:6px;gap:4px}
+  .select-control select{padding-left:6px;font-size:11px}.thin-toggle{min-width:58px}.thin-toggle span{padding:0 5px;font-size:11px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 """
@@ -292,10 +367,13 @@ def _card(e: Exposure) -> str:
                   f'{chips(e.for_leagues)}</div>')
     if e.against_leagues:
         sides += (f'<div class="stake-row"><span class="stake-kind against">Against</span>'
-                  f'{chips(e.against_leagues, True)}</div>')
+                  f'{chips(e.against_leagues)}</div>')
 
     src = url_for(e.player.name, e.player.position)
     initials = "".join(p[0] for p in e.player.name.split()[:2]).upper()
+    name_parts = e.player.name.split()
+    short_name = (f'{name_parts[0][0]}. {" ".join(name_parts[1:])}'
+                  if len(name_parts) > 1 else e.player.name)
     photo = (f'<img class="ph" src="{_esc(src)}" alt="" loading="lazy" '
              f'onerror="this.outerHTML=\'<div class=&quot;noph&quot;>{_esc(initials)}</div>\'">'
              if src else f'<div class="noph">{_esc(initials)}</div>')
@@ -320,19 +398,23 @@ def _card(e: Exposure) -> str:
     against_json = _esc(json.dumps(e.against_leagues))
     for_json = _esc(json.dumps(e.for_leagues))
     lock_badge = '<span class="lock">Locked</span>' if e.locked else ''
+    overlap_badge = (f'<span class="overlap-badge"'
+                     f'{"" if e.is_conflict else " hidden"}>Overlap</span>')
 
     return (
-        f'<article class="card{" lk" if e.locked else ""}" style="--tc:{rail_color(e.player.team)}"'
+        f'<article class="card{" lk" if e.locked else ""}{" has-overlap" if e.is_conflict else ""}" '
+        f'style="--tc:{rail_color(e.player.team)}"'
         f' data-key="{_esc(e.player.key)}" data-tier="{_tier(e)}"'
         f' data-exp="{len(e.against_leagues)}" data-net="{e.net}"'
         f' data-name="{_esc(e.player.name)}" data-pos="{_esc(e.player.position)}"'
+        f' data-team="{_esc(e.player.team)}"'
         f' data-wave="{_esc(wave)}" data-ts="{kick.isoformat() if kick else "9999"}"'
         f' data-locked="{"1" if e.locked else "0"}"'
         f' data-against="{against_json}" data-for="{for_json}">'
         f'<button class="card-main" type="button" aria-expanded="false" '
         f'aria-label="Show why {_esc(e.player.name)} matters">'
-        f'{photo}<div class="body"><div class="nm">{_esc(e.player.name)}</div>'
-        f'<div class="mt"><span>{meta}</span>{lock_badge}</div>'
+        f'{photo}<div class="body"><div class="nm" data-short="{_esc(short_name)}">{_esc(e.player.name)}</div>'
+        f'<div class="mt"><span>{meta}</span>{lock_badge}{overlap_badge}</div>'
         f'<div class="side">{sides}</div></div>'
         f'<div class="fig">{_fig(e)}</div><span class="chev" aria-hidden="true">⌄</span></button>'
         f'<div class="detail" hidden>{"".join(detail)}</div></article>'
@@ -349,9 +431,11 @@ def _group(title: str, count: int, sub: str, cards: str, empty: str) -> str:
 def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
           wave, now: datetime) -> str:
     conf = ledger.conflicts(table)
-    multi = ledger.multi_exposure(table)
-    single = ledger.single_exposure(table)
     facing = [e for e in table.values() if e.against_leagues]
+    multi = sorted((e for e in facing if len(e.against_leagues) >= 2),
+                   key=lambda e: (-len(e.against_leagues), e.player.name))
+    single = sorted((e for e in facing if len(e.against_leagues) == 1),
+                    key=lambda e: e.player.name)
     open_n = sum(1 for e in facing if not e.locked)
     next_times = sorted(e.kickoff for e in facing if not e.locked and e.kickoff)
     next_at = next_times[0] if next_times else None
@@ -370,15 +454,21 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
     league_meta = [{"name": m.league_name, "opp": m.opp_team,
                     "code": LEAGUES[m.league_name]["code"],
                     "color": LEAGUES[m.league_name]["color"]} for m in ok]
+    relevant = sorted(
+        (e for e in table.values() if e.for_leagues or e.against_leagues),
+        key=lambda e: (-len(e.against_leagues), e.player.name),
+    )
+    cheering = [e for e in relevant if e.for_leagues]
 
     p = ['<div class="wrap"><div class="top">',
          f'<div class="eyebrow">Week {week} &middot; {_esc(label)} &middot; '
          f'{len(ok)} league{"s" if len(ok) != 1 else ""}</div>',
-         f'<h1 class="thesis"><em data-facing-count>{len(facing)}</em> can hurt you</h1>',
+         f'<h1 class="thesis"><em data-facing-count>{len(facing)}</em> '
+         '<span data-scope-copy>can hurt you</span></h1>',
          '<div class="tally">',
-         f'<div><b data-divided-count>{len(conf)}</b> divided</div>',
-         f'<div><b data-doubled-count>{len(multi)}</b> doubled</div>',
-         f'<div><b data-open-count>{open_n}</b> open</div>',
+         f'<div><b data-divided-count>{len(multi)}</b> <span data-first-label>doubled</span></div>',
+         f'<div><b data-doubled-count>{len(single)}</b> <span data-second-label>single</span></div>',
+         f'<div><b data-open-count>{open_n}</b> <span>open</span></div>',
          '</div>']
 
     if next_at:
@@ -395,51 +485,49 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
                  '<span data-next-copy>Every current threat has kicked off.</span></div></div>')
     p.append('</div>')
 
-    p.append('<div class="meaning"><span class="meaning-label">Card key:</span>'
-             '<span class="stake-kind for">Start</span><span class="meaning-label">on your lineup</span>'
-             '<span class="stake-kind against">Against</span><span class="meaning-label">on theirs</span></div>')
-
-    p.append('<div class="legend-title">Leagues shown <span>— uncheck any league to remove it from every comparison</span></div>')
-    p.append('<div class="legend" role="group" aria-label="Leagues shown">')
-    for m in ok:
-        meta = LEAGUES[m.league_name]
-        p.append(f'<label class="lgd" style="--lc:{meta["color"]}" title="{_esc(m.league_name)}">'
-                 f'<input type="checkbox" data-league-check="{_esc(m.league_name)}" checked '
-                 f'aria-label="Show {_esc(m.league_name)}">'
-                 f'<span class="code">{_esc(meta["code"])}</span>'
-                 f'<span class="vs">vs {_esc(m.opp_team)}</span></label>')
-    p.append('</div>')
+    p.append('<nav class="scope-tabs" aria-label="Player view">'
+             f'<button data-scope="against" aria-pressed="true">Against<small>{len(facing)} players</small></button>'
+             f'<button data-scope="cheer" aria-pressed="false">Cheer for<small>{len(cheering)} players</small></button>'
+             f'<button data-scope="overlap" aria-pressed="false">Divided<small>{len(conf)} players</small></button>'
+             '</nav>')
 
     if errs:
         p += [f'<div class="err" style="margin-top:12px"><b>{_esc(m.league_name)}</b> &mdash; '
               f'{_esc(m.error)}</div>' for m in errs]
 
     p += ['<div class="controls">',
-          '<div class="bar"><span class="cap">Group</span><div class="choices" role="group" aria-label="Group players">',
-          '<button data-view="threat" aria-pressed="true">Threat</button>',
-          '<button data-view="kickoff" aria-pressed="false">Kickoff</button>',
-          '<button data-view="league" aria-pressed="false">League</button>',
-          '</div></div>',
-          '<div class="bar"><span class="cap">Sort</span><div class="choices" role="group" aria-label="Sort players">',
-          '<button data-sort="exp" aria-pressed="true">Most impact</button>',
-          '<button data-sort="time" aria-pressed="false">Kickoff</button>',
-          '<button data-sort="name" aria-pressed="false">Name</button>',
-          '<button data-sort="pos" aria-pressed="false">Position</button>',
-          '</div></div>',
-          '<div class="bar"><span class="cap">Show</span><div class="choices" role="group" aria-label="Filter players">',
-          '<button data-filter="all" aria-pressed="true">All</button>',
-          '<button data-filter="open" aria-pressed="false">Open only</button>',
-          '<button data-filter="QB" aria-pressed="false">QB</button>',
-          '<button data-filter="RB" aria-pressed="false">RB</button>',
-          '<button data-filter="WR" aria-pressed="false">WR</button>',
-          '<button data-filter="TE" aria-pressed="false">TE</button>',
-          '</div></div></div>',
+          '<div class="control-strip">',
+          '<label class="select-control"><span>Group</span><select data-view-select aria-label="Group players">'
+          '<option value="threat">Threat</option><option value="kickoff">Kickoff</option>'
+          '<option value="league">League</option></select></label>',
+          '<label class="select-control"><span>Sort</span><select data-sort-select aria-label="Sort players">'
+          '<option value="exp">Impact</option><option value="time">Kickoff</option>'
+          '<option value="name">Name</option><option value="pos">Position</option></select></label>',
+          '<label class="select-control"><span>Show</span><select data-filter-select aria-label="Filter players">'
+          '<option value="all">All</option><option value="open">Open</option><option value="QB">QB</option>'
+          '<option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option></select></label>',
+          '<label class="thin-toggle"><input type="checkbox" data-thin-check>'
+          '<span>Slim</span></label></div>',
+          '<div class="filter-drawers">',
+          f'<details class="filter-drawer league-filter"><summary>Leagues <span data-league-count>{len(ok)} of {len(ok)}</span></summary>',
+          '<div class="legend" role="group" aria-label="Leagues shown">']
+    for m in ok:
+        meta = LEAGUES[m.league_name]
+        p.append(f'<label class="lgd" style="--lc:{meta["color"]}" title="{_esc(m.league_name)}">'
+                 f'<input type="checkbox" data-league-check="{_esc(m.league_name)}" checked '
+                 f'aria-label="Show {_esc(m.league_name)}">'
+                 f'<span class="code">{_esc(meta["code"])}</span></label>')
+    p += ['</div></details>',
+          '<details class="filter-drawer team-filter"><summary>NFL teams <span data-team-count>32 of 32 selected</span></summary>',
+          '<div class="team-tools"><button type="button" data-teams="all">Select all</button>'
+          '<button type="button" data-teams="none">Clear all</button></div>',
+          '<div class="team-grid" role="group" aria-label="NFL teams shown">']
+    for team in NFL_TEAMS:
+        p.append(f'<label class="team-choice"><input type="checkbox" data-team-check="{team}" checked '
+                 f'aria-label="Show {team} players"><span>{team}</span></label>')
+    p += ['</div></details></div></div>',
           '<div id="stage">']
 
-    p.append(_group("Divided", len(conf),
-                    "You start him and you face him. Net is your true stake.",
-                    "".join(_card(e) for e in conf),
-                    "Nobody you start is playing against you."))
     p.append(_group("Doubled up", len(multi),
                     "One big game costs you more than one matchup.",
                     "".join(_card(e) for e in multi),
@@ -448,6 +536,9 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
                     "".join(_card(e) for e in single),
                     "No other skill starters against you."))
     p.append('</div>')
+    p.append('<template id="card-source">')
+    p.extend(_card(e) for e in relevant)
+    p.append('</template>')
 
     p.append(f'<footer>Generated {now.astimezone(DISPLAY_TZ):%a %b %-d %-I:%M%p} '
              f'{_esc(config.DISPLAY_TZ_LABEL)} &middot; '
@@ -472,14 +563,14 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
 JS = r"""
 (function(){
   var stage = document.getElementById("stage");
-  if(!stage) return;
-  // Every derived view starts from this immutable set. League view repeats a
-  // multi-exposed player by design, so reading back from the current DOM would
-  // multiply cards every time the user changed a control.
-  var sourceCards = Array.prototype.slice.call(stage.querySelectorAll(".card"))
+  var source = document.getElementById("card-source");
+  if(!stage || !source) return;
+  // Every view starts from one immutable set. This includes owned-only players,
+  // which are intentionally absent from the no-script Against fallback.
+  var sourceCards = Array.prototype.slice.call(source.content.querySelectorAll(".card"))
     .map(function(c){ return c.cloneNode(true); });
   var leagueMeta = JSON.parse(document.getElementById("meta").textContent).leagues;
-  var view = "threat", sort = "exp", filter = "all";
+  var scope = "against", view = "threat", sort = "exp", filter = "all";
 
   function jsonList(card, key){
     try { return JSON.parse(card.dataset[key] || "[]"); }
@@ -489,6 +580,11 @@ JS = r"""
   function selectedLeagues(){
     return new Set(Array.prototype.slice.call(document.querySelectorAll("[data-league-check]:checked"))
       .map(function(input){ return input.dataset.leagueCheck; }));
+  }
+
+  function selectedTeams(){
+    return new Set(Array.prototype.slice.call(document.querySelectorAll("[data-team-check]:checked"))
+      .map(function(input){ return input.dataset.teamCheck; }));
   }
 
   function opponentFor(name){
@@ -507,19 +603,32 @@ JS = r"""
     detail.appendChild(row);
   }
 
-  function prepareCard(source, selected){
-    var mine = jsonList(source, "for").filter(function(name){ return selected.has(name); });
-    var against = jsonList(source, "against").filter(function(name){ return selected.has(name); });
-    if(!against.length) return null;
+  function belongs(mine, against, wantedScope){
+    if(wantedScope === "cheer") return mine.length > 0;
+    if(wantedScope === "overlap") return mine.length > 0 && against.length > 0;
+    return against.length > 0;
+  }
 
-    var card = source.cloneNode(true);
-    var conflict = mine.length && against.length;
+  function prepareCard(sourceCard, selected){
+    var mine = jsonList(sourceCard, "for").filter(function(name){ return selected.has(name); });
+    var against = jsonList(sourceCard, "against").filter(function(name){ return selected.has(name); });
+    if(!belongs(mine, against, scope)) return null;
+
+    var card = sourceCard.cloneNode(true);
+    var conflict = mine.length > 0 && against.length > 0;
     var net = mine.length - against.length;
     card.dataset.for = JSON.stringify(mine);
     card.dataset.against = JSON.stringify(against);
     card.dataset.exp = against.length;
+    card.dataset.own = mine.length;
     card.dataset.net = net;
-    card.dataset.tier = conflict ? "divided" : (against.length >= 2 ? "multi" : "single");
+    card.dataset.overlap = conflict ? "1" : "0";
+    card.classList.toggle("has-overlap", conflict);
+    card.dataset.tier = against.length >= 2 ? "multi" : "single";
+    if(scope === "cheer") card.dataset.tier = mine.length >= 2 ? "multi" : "single";
+    if(scope === "overlap") card.dataset.tier = net > 0 ? "positive" : (net < 0 ? "negative" : "even");
+    card.dataset.impact = scope === "cheer" ? mine.length :
+      (scope === "overlap" ? mine.length + against.length : against.length);
 
     card.querySelectorAll(".stake-row").forEach(function(row){
       var shown = 0;
@@ -531,6 +640,8 @@ JS = r"""
       });
       row.hidden = shown === 0;
     });
+    var badge = card.querySelector(".overlap-badge");
+    if(badge) badge.hidden = !conflict;
 
     var fig = card.querySelector(".fig");
     fig.replaceChildren();
@@ -538,6 +649,9 @@ JS = r"""
       fig.appendChild(el("div", "fg " + (net === 0 ? "zip" : (net > 0 ? "pos" : "neg")),
         net === 0 ? "even" : (net > 0 ? "+" + net : String(net))));
       fig.appendChild(el("div", "fl", "net"));
+    } else if(scope === "cheer") {
+      fig.appendChild(el("div", "fg pos", "×" + mine.length));
+      fig.appendChild(el("div", "fl", mine.length === 1 ? "start" : "starts"));
     } else {
       fig.appendChild(el("div", "fg neg", "×" + against.length));
       fig.appendChild(el("div", "fl", against.length === 1 ? "matchup" : "matchups"));
@@ -547,20 +661,50 @@ JS = r"""
     detail.replaceChildren();
     addDetail(detail, "You start " + card.dataset.name + " in:", mine, false);
     addDetail(detail, "You face " + card.dataset.name + " in:", against, true);
-    var explanation = conflict ? (net === 0 ? "The stakes are even across the leagues currently shown." :
-      "Net exposure is " + (net > 0 ? "+" : "") + net + ": starts minus opposing lineups.") :
-      "This player appears in " + against.length + " opposing starting lineup" + (against.length === 1 ? "." : "s.");
+    var explanation;
+    if(conflict) explanation = net === 0 ? "The stakes are even across the leagues currently shown." :
+      "Net exposure is " + (net > 0 ? "+" : "") + net + ": starts minus opposing lineups.";
+    else if(scope === "cheer") explanation = "You start this player in " + mine.length + " league" + (mine.length === 1 ? "." : "s.");
+    else explanation = "This player appears in " + against.length + " opposing starting lineup" + (against.length === 1 ? "." : "s.");
     detail.appendChild(el("div", "detail-row", explanation));
     return card;
   }
 
+  function updateScopeCounts(selected, teams){
+    var totals = {against:0, cheer:0, overlap:0};
+    sourceCards.forEach(function(card){
+      if(!teams.has(card.dataset.team)) return;
+      var mine = jsonList(card, "for").filter(function(name){ return selected.has(name); });
+      var against = jsonList(card, "against").filter(function(name){ return selected.has(name); });
+      Object.keys(totals).forEach(function(kind){ if(belongs(mine, against, kind)) totals[kind] += 1; });
+    });
+    document.querySelectorAll("[data-scope]").forEach(function(button){
+      button.querySelector("small").textContent = totals[button.dataset.scope] + " players";
+    });
+  }
+
   function updateSummary(all){
-    var divided = all.filter(function(c){ return c.dataset.tier === "divided"; }).length;
-    var doubled = all.filter(function(c){ return c.dataset.tier === "multi"; }).length;
+    var first, second, copy, firstLabel, secondLabel;
+    if(scope === "cheer"){
+      first = all.filter(function(c){ return +c.dataset.own >= 2; }).length;
+      second = all.filter(function(c){ return +c.dataset.own === 1; }).length;
+      copy = "to cheer for"; firstLabel = "multi-start"; secondLabel = "single-start";
+    } else if(scope === "overlap") {
+      first = all.filter(function(c){ return +c.dataset.net > 0; }).length;
+      second = all.filter(function(c){ return +c.dataset.net < 0; }).length;
+      copy = "pull both ways"; firstLabel = "lean for"; secondLabel = "lean against";
+    } else {
+      first = all.filter(function(c){ return c.dataset.tier === "multi"; }).length;
+      second = all.filter(function(c){ return c.dataset.tier === "single"; }).length;
+      copy = "can hurt you"; firstLabel = "doubled"; secondLabel = "single";
+    }
     var open = all.filter(function(c){ return c.dataset.locked !== "1"; }).length;
     document.querySelector("[data-facing-count]").textContent = all.length;
-    document.querySelector("[data-divided-count]").textContent = divided;
-    document.querySelector("[data-doubled-count]").textContent = doubled;
+    document.querySelector("[data-scope-copy]").textContent = copy;
+    document.querySelector("[data-divided-count]").textContent = first;
+    document.querySelector("[data-first-label]").textContent = firstLabel;
+    document.querySelector("[data-doubled-count]").textContent = second;
+    document.querySelector("[data-second-label]").textContent = secondLabel;
     document.querySelector("[data-open-count]").textContent = open;
 
     var upcoming = all.filter(function(c){ return c.dataset.locked !== "1" && c.dataset.ts !== "9999"; })
@@ -568,25 +712,29 @@ JS = r"""
     var box = document.querySelector(".next-lock");
     var clock = box.querySelector("[data-countdown]");
     var label = box.querySelector("[data-next-label]");
-    var copy = box.querySelector("[data-next-copy]");
+    var nextCopy = box.querySelector("[data-next-copy]");
     if(upcoming.length){
       var ts = upcoming[0].dataset.ts;
       var atWave = upcoming.filter(function(c){ return c.dataset.ts === ts; });
       box.dataset.nextLock = ts;
       label.textContent = upcoming[0].dataset.wave + " · " + atWave.length + " player" + (atWave.length === 1 ? "" : "s");
-      copy.textContent = "Still actionable in this kickoff wave";
+      nextCopy.textContent = "Still actionable in this kickoff wave";
     } else {
       box.removeAttribute("data-next-lock");
       clock.textContent = "All locked";
       label.textContent = "No upcoming player locks";
-      copy.textContent = all.length ? "Every displayed threat has kicked off." : "Select a league to show its threats.";
+      nextCopy.textContent = all.length ? "Every displayed player has kicked off." : "Adjust the league or team filters to show players.";
     }
   }
 
   function cards(){
     var selected = selectedLeagues();
+    var teams = selectedTeams();
+    updateScopeCounts(selected, teams);
+    document.querySelector("[data-league-count]").textContent = selected.size + " of " + leagueMeta.length;
+    document.querySelector("[data-team-count]").textContent = teams.size + " of 32 selected";
     var effective = sourceCards.map(function(c){ return prepareCard(c, selected); })
-      .filter(function(c){ return c !== null; });
+      .filter(function(c){ return c !== null && teams.has(c.dataset.team); });
     updateSummary(effective);
     return effective.filter(function(c){
       if(filter === "open") return c.dataset.locked !== "1";
@@ -596,7 +744,7 @@ JS = r"""
   }
 
   var CMP = {
-    exp:  function(a,b){ return (+b.dataset.exp - +a.dataset.exp)
+    exp:  function(a,b){ return (+b.dataset.impact - +a.dataset.impact)
                              || (+a.dataset.net - +b.dataset.net)
                              || a.dataset.name.localeCompare(b.dataset.name); },
     time: function(a,b){ return a.dataset.ts.localeCompare(b.dataset.ts)
@@ -629,13 +777,9 @@ JS = r"""
     return d;
   }
 
-  function empty(message){
-    stage.appendChild(el("div", "empty", message));
-  }
+  function empty(message){ stage.appendChild(el("div", "empty", message)); }
 
-  function leaguesFor(card){
-    return jsonList(card, "against");
-  }
+  function leaguesFor(card){ return jsonList(card, scope === "cheer" ? "for" : "against"); }
 
   function build(){
     var all = cards();
@@ -643,8 +787,9 @@ JS = r"""
     stage.replaceChildren();
 
     if(!all.length){
-      empty(filter === "open" ? "No unlocked threats remain." :
-        (filter === "all" ? "No opposing skill starters were found." : "No " + filter + " threats this week."));
+      var noun = scope === "against" ? "opponents" : (scope === "cheer" ? "starters" : "overlaps");
+      empty(filter === "open" ? "No unlocked " + noun + " remain." :
+        (filter === "all" ? "No " + noun + " match the current league and team filters." : "No " + filter + " " + noun + " this week."));
       return;
     }
 
@@ -655,8 +800,7 @@ JS = r"""
         if(!byWave[w]){ byWave[w] = []; order.push(w); }
         byWave[w].push(c);
       });
-      order.sort(function(a,b){
-        return byWave[a][0].dataset.ts.localeCompare(byWave[b][0].dataset.ts); });
+      order.sort(function(a,b){ return byWave[a][0].dataset.ts.localeCompare(byWave[b][0].dataset.ts); });
       order.forEach(function(w){
         var els = byWave[w];
         var shut = els[0].dataset.locked === "1";
@@ -673,24 +817,31 @@ JS = r"""
         if(!selected.has(L.name)) return;
         var els = [];
         all.forEach(function(c){
-          if(leaguesFor(c).indexOf(L.name) !== -1){
-            els.push(c.cloneNode(true));
-          }
+          if(leaguesFor(c).indexOf(L.name) !== -1) els.push(c.cloneNode(true));
         });
         if(!els.length) return;
         groups += 1;
-        var divided = els.filter(function(c){ return c.dataset.tier === "divided"; }).length;
+        var overlaps = els.filter(function(c){ return c.dataset.overlap === "1"; }).length;
         var open = els.filter(function(c){ return c.dataset.locked !== "1"; }).length;
-        var summary = "vs " + L.opp + " · " + divided + " divided · " + open + " open";
-        stage.appendChild(group(L.code + " · " + L.name, els.length,
-          summary, els, null, L.color));
+        var summary = scope === "against" ? "vs " + L.opp + " · " + overlaps + " divided · " + open + " open" :
+          (scope === "cheer" ? "your starters · " + overlaps + " overlap · " + open + " open" : "both sides · " + open + " open");
+        stage.appendChild(group(L.code + " · " + L.name, els.length, summary, els, null, L.color));
       });
       if(!groups) empty("No players match this league view and filter.");
       return;
     }
 
-    var tiers = [
-      ["divided", "Divided", "You start him and you face him. Net is your true stake."],
+    var tiers;
+    if(scope === "cheer") tiers = [
+      ["multi", "Multi-league starts", "You are rooting for him in more than one league."],
+      ["single", "Rooting for", ""]
+    ];
+    else if(scope === "overlap") tiers = [
+      ["positive", "Lean for", "You start him in more leagues than you face him."],
+      ["even", "Even stake", "Your starts and opposing shares cancel out."],
+      ["negative", "Lean against", "You face him in more leagues than you start him."]
+    ];
+    else tiers = [
       ["multi", "Doubled up", "One big game costs you more than one matchup."],
       ["single", "Facing", ""]
     ];
@@ -701,7 +852,7 @@ JS = r"""
       groups += 1;
       stage.appendChild(group(t[1], els.length, t[2], els, null));
     });
-    if(!groups) empty("No threats match this filter.");
+    if(!groups) empty("No players match this filter.");
   }
 
   function press(sel, key, val){
@@ -710,42 +861,75 @@ JS = r"""
     });
   }
 
-  document.querySelectorAll("[data-view]").forEach(function(b){
+  function saveHidden(selector, dataKey, storageKey){
+    var hidden = Array.prototype.slice.call(document.querySelectorAll(selector + ":not(:checked)"))
+      .map(function(box){ return box.dataset[dataKey]; });
+    try { localStorage.setItem(storageKey, JSON.stringify(hidden)); } catch(e) {}
+  }
+
+  function restoreHidden(selector, dataKey, storageKey){
+    try {
+      var hidden = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      document.querySelectorAll(selector).forEach(function(input){
+        input.checked = hidden.indexOf(input.dataset[dataKey]) === -1;
+      });
+    } catch(e) {}
+  }
+
+  function applyThin(enabled){
+    document.body.classList.toggle("thin", enabled);
+    stage.querySelectorAll(".card-main").forEach(function(button){
+      button.setAttribute("aria-expanded", "false");
+      var detail = button.nextElementSibling;
+      if(detail) detail.hidden = true;
+    });
+  }
+
+  document.querySelectorAll("[data-scope]").forEach(function(b){
     b.addEventListener("click", function(){
-      view = b.dataset.view; press("[data-view]", "view", view);
-      build();
+      scope = b.dataset.scope; press("[data-scope]", "scope", scope); build(); updateCountdown();
     });
   });
-  document.querySelectorAll("[data-sort]").forEach(function(b){
-    b.addEventListener("click", function(){
-      sort = b.dataset.sort; press("[data-sort]", "sort", sort); build();
-    });
-  });
-  document.querySelectorAll("[data-filter]").forEach(function(b){
-    b.addEventListener("click", function(){
-      filter = b.dataset.filter; press("[data-filter]", "filter", filter); build();
-    });
-  });
+  var viewSelect = document.querySelector("[data-view-select]");
+  var sortSelect = document.querySelector("[data-sort-select]");
+  var filterSelect = document.querySelector("[data-filter-select]");
+  viewSelect.addEventListener("change", function(){ view = viewSelect.value; build(); });
+  sortSelect.addEventListener("change", function(){ sort = sortSelect.value; build(); });
+  filterSelect.addEventListener("change", function(){ filter = filterSelect.value; build(); });
   document.querySelectorAll("[data-league-check]").forEach(function(input){
     input.addEventListener("change", function(){
-      var hidden = Array.prototype.slice.call(document.querySelectorAll("[data-league-check]:not(:checked)"))
-        .map(function(box){ return box.dataset.leagueCheck; });
-      try { localStorage.setItem("fm-hidden-leagues", JSON.stringify(hidden)); } catch(e) {}
-      build();
-      updateCountdown();
+      saveHidden("[data-league-check]", "leagueCheck", "fm-hidden-leagues"); build(); updateCountdown();
     });
   });
-
-  try {
-    var hiddenLeagues = JSON.parse(localStorage.getItem("fm-hidden-leagues") || "[]");
-    document.querySelectorAll("[data-league-check]").forEach(function(input){
-      input.checked = hiddenLeagues.indexOf(input.dataset.leagueCheck) === -1;
+  document.querySelectorAll("[data-team-check]").forEach(function(input){
+    input.addEventListener("change", function(){
+      saveHidden("[data-team-check]", "teamCheck", "fm-hidden-teams"); build(); updateCountdown();
     });
-  } catch(e) {}
+  });
+  document.querySelectorAll("[data-teams]").forEach(function(button){
+    button.addEventListener("click", function(){
+      var checked = button.dataset.teams === "all";
+      document.querySelectorAll("[data-team-check]").forEach(function(input){ input.checked = checked; });
+      saveHidden("[data-team-check]", "teamCheck", "fm-hidden-teams"); build(); updateCountdown();
+    });
+  });
+  var thinCheck = document.querySelector("[data-thin-check]");
+  if(thinCheck){
+    try { thinCheck.checked = localStorage.getItem("fm-thin-mode") === "1"; } catch(e) {}
+    applyThin(thinCheck.checked);
+    thinCheck.addEventListener("change", function(){
+      applyThin(thinCheck.checked);
+      try { localStorage.setItem("fm-thin-mode", thinCheck.checked ? "1" : "0"); } catch(e) {}
+    });
+  }
+
+  restoreHidden("[data-league-check]", "leagueCheck", "fm-hidden-leagues");
+  restoreHidden("[data-team-check]", "teamCheck", "fm-hidden-teams");
 
   stage.addEventListener("click", function(event){
     var button = event.target.closest(".card-main");
     if(!button) return;
+    if(document.body.classList.contains("thin")) return;
     var detail = button.nextElementSibling;
     var open = button.getAttribute("aria-expanded") === "true";
     button.setAttribute("aria-expanded", String(!open));

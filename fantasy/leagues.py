@@ -15,6 +15,17 @@ import re
 PALETTE = ["#A78BFA", "#4ADE80", "#F472B6", "#60A5FA", "#CBD5E1",
            "#FCA5A5", "#67E8F9", "#FDE68A"]
 
+# The five leagues on this board have deliberately terse, user-chosen
+# identities. Match by stable name fragments so a year suffix can change
+# without silently changing the chip colour or abbreviation.
+KNOWN_IDENTITIES = (
+    (lambda n: n.startswith("nueva "), "N", "#3B82F6"),
+    (lambda n: n == "nu ff", "N", "#A855F7"),
+    (lambda n: n == "substation", "SF", "#EF4444"),
+    (lambda n: "ixl champions" in n, "CL", "#FBBF24"),
+    (lambda n: n.startswith("ixl fantasy"), "IXL", "#A16207"),
+)
+
 _STOP = {"the", "league", "fantasy", "football", "ff", "of", "and"}
 
 
@@ -61,8 +72,14 @@ def assign(names: list[str]) -> dict[str, dict]:
                 extra = words[-1] if len(words) > 1 else "X"
             codes[name] = f"{code}·{extra[0].upper()}"
 
-    return {
-        name: {"code": override.get(name, codes[name]),
-               "color": PALETTE[i % len(PALETTE)]}
-        for i, name in enumerate(names)
-    }
+    assigned = {}
+    for i, name in enumerate(names):
+        code, color = codes[name], PALETTE[i % len(PALETTE)]
+        folded = name.casefold().strip()
+        known = next(((known_code, known_color)
+                      for matches, known_code, known_color in KNOWN_IDENTITIES
+                      if matches(folded)), None)
+        if known:
+            code, color = known
+        assigned[name] = {"code": override.get(name, code), "color": color}
+    return assigned
