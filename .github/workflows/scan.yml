@@ -55,11 +55,12 @@ jobs:
           NOTIFY_BACKEND: ${{ vars.NOTIFY_BACKEND || 'sms' }}
           BOARD_BASE_URL: ${{ vars.BOARD_BASE_URL }}
           LEAD_MINUTES: ${{ vars.LEAD_MINUTES || '90' }}
+          SEND_MODE: ${{ vars.SEND_MODE || 'daily' }}
         run: |
           python -m fantasy.cli run ${{ inputs.force && '--force' || '' }}
 
       - name: Publish board
-        if: hashFiles('out/index.html') != '' && env.VERCEL_TOKEN != ''
+        if: hashFiles('out/index.html') != '' && secrets.VERCEL_TOKEN != ''
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
