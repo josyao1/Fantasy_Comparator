@@ -43,7 +43,9 @@ jobs:
     permissions:
       contents: write
     env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # A boolean, not the secret: job-level env is visible to every step,
+      # including pip install. The token itself is scoped to the publish step.
+      HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -84,8 +86,11 @@ jobs:
             ${{ (github.event_name == 'push' || inputs.dry_run) && '--dry-run' || '' }}
 
       - name: Publish board
-        if: hashFiles('out/index.html') != '' && env.VERCEL_TOKEN != ''
+        if: hashFiles('out/index.html') != '' && env.HAS_VERCEL == 'true'
         env:
+          # The CLI reads VERCEL_TOKEN from the environment, so it never needs
+          # to appear in argv where a process listing would expose it.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           # This step runs third-party code. Withhold the job's repo-write
@@ -93,9 +98,9 @@ jobs:
           # silently by `latest`.
           GITHUB_TOKEN: ""
         run: |
-          deployment_url="$(npx --yes vercel@59.13.1 deploy out --prod --yes --token "$VERCEL_TOKEN")"
+          deployment_url="$(npx --yes vercel@59.13.1 deploy out --prod --yes)"
           npx --yes vercel@59.13.1 alias set "$deployment_url" fantasy-comparator.vercel.app \
-            --scope joshuas-projects-1a7ca3fd --token "$VERCEL_TOKEN"
+            --scope joshuas-projects-1a7ca3fd
 
       - name: Persist dedup state
         if: github.event_name != 'push'
