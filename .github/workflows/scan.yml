@@ -22,12 +22,17 @@ concurrency:
   group: fantasy-scan
   cancel-in-progress: false
 
-permissions:
-  contents: write
+# Deny by default; the scan job re-grants only what it needs.
+permissions: {}
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    # contents:write is required solely to commit data/sent.json. GitHub has no
+    # finer grain than `contents`, so the mitigation is to keep the write token
+    # away from third-party code (see the publish step).
+    permissions:
+      contents: write
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
@@ -72,7 +77,11 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx --yes vercel@latest deploy out --prod --yes --token "$VERCEL_TOKEN"
+          # This step runs third-party code. Withhold the job's repo-write
+          # token from it, and pin the CLI so a bad release cannot be pulled in
+          # silently by `latest`.
+          GITHUB_TOKEN: ""
+        run: npx --yes vercel@59.13.1 deploy out --prod --yes --token "$VERCEL_TOKEN"
 
       - name: Persist dedup state
         run: |
