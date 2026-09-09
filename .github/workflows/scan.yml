@@ -98,14 +98,12 @@ jobs:
           # silently by `latest`.
           GITHUB_TOKEN: ""
         run: |
-          # `deploy` picks the token up from the environment. `alias` does not:
-          # with --scope it tries to resolve a user first and fails 404, so it
-          # takes --token explicitly. Argv is visible in a process listing, which
-          # is acceptable on a single-tenant ephemeral runner; the token is still
-          # kept out of job-level env where every step could read it.
+          # VERCEL_ORG_ID in this step's env already selects the team, so
+          # passing --scope as well makes the CLI resolve a user and 404.
+          # The token stays out of job-level env either way.
           deployment_url="$(npx --yes vercel@59.13.1 deploy out --prod --yes)"
           npx --yes vercel@59.13.1 alias set "$deployment_url" fantasy-comparator.vercel.app \
-            --scope joshuas-projects-1a7ca3fd --token "$VERCEL_TOKEN"
+            --token "$VERCEL_TOKEN"
 
       - name: Persist dedup state
         if: github.event_name != 'push'
