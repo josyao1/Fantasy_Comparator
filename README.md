@@ -82,7 +82,7 @@ explicit team id makes identification deterministic and is what lets public
 leagues work with no credentials at all:
 
 ```
-ESPN_LEAGUES=944591:12,302220592:1,370831240:6
+ESPN_LEAGUES=123456:4,7890123:11
 ```
 
 Without the `:teamId` suffix your team is matched via `SWID` instead, which

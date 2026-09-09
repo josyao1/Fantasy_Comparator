@@ -13,6 +13,10 @@ on:
         description: "Scan and send regardless of the schedule"
         type: boolean
         default: false
+      dry_run:
+        description: "Scan and build the board, but send no text"
+        type: boolean
+        default: false
 
 concurrency:
   group: fantasy-scan
@@ -57,7 +61,9 @@ jobs:
           LEAD_MINUTES: ${{ vars.LEAD_MINUTES || '90' }}
           SEND_MODE: ${{ vars.SEND_MODE || 'daily' }}
         run: |
-          python -m fantasy.cli run ${{ inputs.force && '--force' || '' }}
+          python -m fantasy.cli run \
+            ${{ inputs.force && '--force' || '' }} \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Publish board
         if: hashFiles('out/index.html') != '' && secrets.VERCEL_TOKEN != ''

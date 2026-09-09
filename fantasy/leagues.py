@@ -1,7 +1,7 @@
 """Per-league identity: a short code and a colour, used consistently.
 
 Which league a threat lands in is the thing this board exists to answer, but
-full names ("IXL Champions League '26 - Kiwi") are far too long to repeat on
+full names ("Sunday Money League '26 - East") are far too long to repeat on
 every card. Each league therefore gets a chip: a short code plus a stable
 colour, so a league can be recognised by colour alone once learned.
 """
@@ -35,7 +35,7 @@ def _code(name: str) -> str:
 def assign(names: list[str]) -> dict[str, dict]:
     """Map each league name to a stable code and colour.
 
-    Codes collide often — two IXL leagues share a first word — so a colliding
+    Codes collide often — two leagues can share a first word — so a colliding
     code is extended with the first distinguishing word of each name.
     """
     override = {}

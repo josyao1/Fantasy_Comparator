@@ -53,17 +53,25 @@ def _proteams() -> dict[int, str]:
 
 
 def fetch(spec: str, week: int, season: str, priority: int) -> LeagueMatchup:
-    """`spec` is "leagueId" or "leagueId:teamId".
+    """`spec` is "leagueId", "leagueId:teamId", or "leagueId:teamId:Display Name".
 
     Public leagues read without cookies, so auth is attempted opportunistically
     rather than demanded up front. An explicit teamId identifies your team
     without SWID, which also makes the lookup deterministic.
+
+    A display name given here survives a failed fetch, so an expired-cookie
+    alert can name the league instead of printing a bare numeric id. It lives
+    in the secret rather than a tracked cache so the repo can stay public
+    without publishing which leagues you play in.
     """
-    league_id, _, team_hint = spec.partition(":")
+    parts = spec.split(":")
+    league_id = parts[0]
+    team_hint = parts[1] if len(parts) > 1 else ""
+    given_name = ":".join(parts[2:]).strip() if len(parts) > 2 else ""
     matchup = LeagueMatchup(
         platform="espn",
         league_id=league_id,
-        league_name=_names().get(league_id, f"ESPN {league_id}"),
+        league_name=given_name or _names().get(league_id, f"ESPN {league_id}"),
         priority=priority,
         my_team="",
         opp_team="",
@@ -89,7 +97,7 @@ def fetch(spec: str, week: int, season: str, priority: int) -> LeagueMatchup:
 
     name = (data.get("settings") or {}).get("name")
     if name:
-        matchup.league_name = name
+        matchup.league_name = given_name or name
         _remember_name(league_id, name)
     teams = {t["id"]: t for t in data.get("teams", [])}
     proteams = _proteams()

@@ -14,7 +14,7 @@ for K in SLEEPER_USER_ID SLEEPER_LEAGUES ESPN_LEAGUES ESPN_S2 SWID \
          GMAIL_USER GMAIL_APP_PW SMS_TO; do
   V="$(get "$K")"
   if [ -z "$V" ]; then echo "  skip   $K (empty in .env)"; continue; fi
-  printf '%s' "$V" | gh secret set "$K" --repo "$REPO" --body-file - >/dev/null
+  printf '%s' "$V" | gh secret set "$K" --repo "$REPO" >/dev/null
   echo "  secret $K"
 done
 
@@ -22,14 +22,14 @@ done
 if [ -f .vercel/project.json ]; then
   ORG=$(python3 -c "import json;print(json.load(open('.vercel/project.json'))['orgId'])")
   PRJ=$(python3 -c "import json;print(json.load(open('.vercel/project.json'))['projectId'])")
-  printf '%s' "$ORG" | gh secret set VERCEL_ORG_ID     --repo "$REPO" --body-file - >/dev/null
-  printf '%s' "$PRJ" | gh secret set VERCEL_PROJECT_ID --repo "$REPO" --body-file - >/dev/null
+  printf '%s' "$ORG" | gh secret set VERCEL_ORG_ID     --repo "$REPO" >/dev/null
+  printf '%s' "$PRJ" | gh secret set VERCEL_PROJECT_ID --repo "$REPO" >/dev/null
   echo "  secret VERCEL_ORG_ID"
   echo "  secret VERCEL_PROJECT_ID"
 fi
 
 if [ -n "${VERCEL_TOKEN:-}" ]; then
-  printf '%s' "$VERCEL_TOKEN" | gh secret set VERCEL_TOKEN --repo "$REPO" --body-file - >/dev/null
+  printf '%s' "$VERCEL_TOKEN" | gh secret set VERCEL_TOKEN --repo "$REPO" >/dev/null
   echo "  secret VERCEL_TOKEN"
 else
   echo "  TODO   VERCEL_TOKEN — create at https://vercel.com/account/tokens, then:"
