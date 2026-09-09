@@ -20,7 +20,8 @@ import requests
 
 from . import config
 
-ET = ZoneInfo("America/New_York")
+ET = ZoneInfo("America/New_York")  # NFL game-day grouping stays league-standard.
+DISPLAY_TZ = ZoneInfo(config.DISPLAY_TIMEZONE)
 SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
 STATE_URL = "https://api.sleeper.app/v1/state/nfl"
 CACHE = config.DATA / "schedule.json"
@@ -61,11 +62,11 @@ class Wave:
 
     @property
     def label(self) -> str:
-        local = self.kickoff_dt.astimezone(ET)
+        local = self.kickoff_dt.astimezone(DISPLAY_TZ)
         base = f"{local:%a} {local:%-I:%M%p}".replace("AM", "am").replace("PM", "pm")
         if len({g.kickoff for g in self.games}) > 1:
             return f"{local:%a} · {len(self.games)} games"
-        return base
+        return f"{base} {config.DISPLAY_TZ_LABEL}"
 
     def fire_at(self, lead_minutes: int) -> datetime:
         return self.kickoff_dt - timedelta(minutes=lead_minutes)

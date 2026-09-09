@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fantasy import ledger, schedule
+from fantasy.cli import _next_poll
 from fantasy.crosswalk import normalize_team, player_key
 from fantasy.models import LeagueMatchup, Player
 
@@ -109,6 +110,13 @@ def test_wave_expires_at_kickoff():
     assert schedule.due_wave([_wave(NOW - timedelta(minutes=1))], NOW, 90, set()) is None
 
 
+def test_action_poll_time_rounds_up_to_next_half_hour():
+    assert _next_poll(NOW.replace(minute=50)).minute == 0
+    assert _next_poll(NOW.replace(minute=50)).hour == NOW.hour + 1
+    assert _next_poll(NOW.replace(minute=5)).minute == 30
+    assert _next_poll(NOW.replace(minute=30)).minute == 30
+
+
 # ── injection ─────────────────────────────────────────────────────────────
 # League and team names come from the ESPN/Sleeper APIs, so they are written
 # by other members of the league and must be treated as untrusted input.
@@ -149,3 +157,31 @@ def test_client_side_grouping_never_uses_innerhtml_for_names():
     # the group builder must construct DOM nodes, not concatenate markup
     assert "innerHTML" not in render.JS.split("function group(")[1].split("return d;")[0]
     assert "textContent" in render.JS
+
+
+def test_board_has_clear_relationship_labels_and_controls():
+    html = _render_with_name("safe")
+    assert '<span class="stake-kind for">Start</span>' in html
+    assert '<span class="stake-kind against">Against</span>' in html
+    assert '<button data-theme=' not in html
+    assert 'data-filter="open"' in html
+    assert 'data-sort="time"' in html
+    assert 'data-league-check="safe"' in html
+    assert '<span class="opp">vs them</span>' in html
+    assert 'aria-expanded="false"' in html
+
+
+def test_derived_views_always_rebuild_from_immutable_cards():
+    # League view repeats a player once per opposing league. Reading cards
+    # back from that rendered view caused exponential duplication on re-sort.
+    assert "var sourceCards" in render.JS
+    build = render.JS.split("function build()")[1].split("function press(")[0]
+    assert "var all = cards()" in build
+    assert 'stage.querySelectorAll(".card")' not in build
+
+
+def test_league_toggles_recompute_exposure_instead_of_only_hiding_cards():
+    assert "function prepareCard" in render.JS
+    assert 'card.dataset.tier = conflict ? "divided"' in render.JS
+    assert "card.dataset.exp = against.length" in render.JS
+    assert "updateSummary(effective)" in render.JS

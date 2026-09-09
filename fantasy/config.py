@@ -47,3 +47,5 @@ BOARD_BASE_URL = os.environ.get("BOARD_BASE_URL", "").rstrip("/")
 LEAD_MINUTES = int(os.environ.get("LEAD_MINUTES", "90"))
 SEASON = os.environ.get('SEASON', '2026')
 SEND_MODE = os.environ.get("SEND_MODE", "daily")  # daily | wave
+DISPLAY_TIMEZONE = os.environ.get("DISPLAY_TIMEZONE", "America/Los_Angeles")
+DISPLAY_TZ_LABEL = os.environ.get("DISPLAY_TZ_LABEL", "PT")

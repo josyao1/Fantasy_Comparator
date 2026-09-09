@@ -67,6 +67,8 @@ jobs:
           BOARD_BASE_URL: ${{ vars.BOARD_BASE_URL }}
           LEAD_MINUTES: ${{ vars.LEAD_MINUTES || '90' }}
           SEND_MODE: ${{ vars.SEND_MODE || 'daily' }}
+          DISPLAY_TIMEZONE: ${{ vars.DISPLAY_TIMEZONE || 'America/Los_Angeles' }}
+          DISPLAY_TZ_LABEL: ${{ vars.DISPLAY_TZ_LABEL || 'PT' }}
         run: |
           python -m fantasy.cli run \
             ${{ inputs.force && '--force' || '' }} \

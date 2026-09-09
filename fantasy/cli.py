@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import config, ledger, notify, render, schedule, state
 from .adapters import espn, sleeper
@@ -22,6 +22,15 @@ def _waves(season: str, week: int):
     if config.SEND_MODE == "wave":
         return schedule.waves_for_week(season, week)
     return schedule.day_waves(season, week)
+
+
+def _next_poll(dt: datetime, minutes: int = 30) -> datetime:
+    """First coarse Actions poll at or after an alert becomes eligible."""
+    poll = dt.replace(second=0, microsecond=0)
+    remainder = poll.minute % minutes
+    if remainder or poll < dt:
+        poll += timedelta(minutes=minutes - remainder)
+    return poll
 
 
 def collect(week: int, season: str) -> list[LeagueMatchup]:
@@ -75,8 +84,10 @@ def main(argv=None) -> int:
 
     if args.command == "schedule":
         for w in _waves(season, week):
-            fire = w.fire_at(config.LEAD_MINUTES).astimezone(schedule.ET)
-            print(f"{w.label:14s} {len(w.games):2d}g  fire {fire:%a %-I:%M%p}  {w.key}")
+            fire = w.fire_at(config.LEAD_MINUTES).astimezone(schedule.DISPLAY_TZ)
+            poll = _next_poll(fire)
+            print(f"{w.label:18s} {len(w.games):2d}g  eligible {fire:%a %-I:%M%p} "
+                  f"· first poll {poll:%-I:%M%p} {config.DISPLAY_TZ_LABEL}  {w.key}")
         return 0
 
     wave = None

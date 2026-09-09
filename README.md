@@ -119,8 +119,9 @@ Put the `.env` values in **Settings → Secrets and variables → Actions**:
 `SWID`, `GMAIL_USER`, `GMAIL_APP_PW`, `SMS_TO`, and for publishing
 `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 
-*Variables* — `BOARD_BASE_URL`, optionally `LEAD_MINUTES` (default 90) and
-`NOTIFY_BACKEND`.
+*Variables* — `BOARD_BASE_URL`, optionally `LEAD_MINUTES` (default 90),
+`NOTIFY_BACKEND`, `DISPLAY_TIMEZONE` (default `America/Los_Angeles`), and
+`DISPLAY_TZ_LABEL` (default `PT`).
 
 Or run `./setup_actions.sh` after `gh auth login`, which reads `.env` and pipes
 each value into `gh secret set` without printing it. `VERCEL_TOKEN` comes from
