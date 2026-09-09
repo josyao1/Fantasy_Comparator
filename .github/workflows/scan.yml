@@ -95,7 +95,7 @@ jobs:
         run: |
           deployment_url="$(npx --yes vercel@59.13.1 deploy out --prod --yes --token "$VERCEL_TOKEN")"
           npx --yes vercel@59.13.1 alias set "$deployment_url" fantasy-comparator.vercel.app \
-            --token "$VERCEL_TOKEN"
+            --scope joshuas-projects-1a7ca3fd --token "$VERCEL_TOKEN"
 
       - name: Persist dedup state
         if: github.event_name != 'push'
