@@ -5,6 +5,15 @@ name: fantasy matchup scan
 # wave is due, so Wednesday openers, Black Friday and Christmas games are all
 # covered without touching this file.
 on:
+  # Code/UI pushes rebuild the live board immediately. The command below forces
+  # a scan but also forces dry-run, so a deploy can never send a text.
+  push:
+    branches: [main]
+    paths:
+      - "fantasy/**"
+      - "data/team_colors.json"
+      - "requirements.txt"
+      - ".github/workflows/scan.yml"
   schedule:
     - cron: "*/30 11-23,0-3 * 9,10,11,12,1 *"
   workflow_dispatch:
@@ -53,7 +62,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Scan and notify
+      - name: Build board and optionally notify
         env:
           SLEEPER_USER_ID: ${{ secrets.SLEEPER_USER_ID }}
           SLEEPER_LEAGUES: ${{ secrets.SLEEPER_LEAGUES }}
@@ -71,8 +80,8 @@ jobs:
           DISPLAY_TZ_LABEL: ${{ vars.DISPLAY_TZ_LABEL || 'PT' }}
         run: |
           python -m fantasy.cli run \
-            ${{ inputs.force && '--force' || '' }} \
-            ${{ inputs.dry_run && '--dry-run' || '' }}
+            ${{ (github.event_name == 'push' || inputs.force) && '--force' || '' }} \
+            ${{ (github.event_name == 'push' || inputs.dry_run) && '--dry-run' || '' }}
 
       - name: Publish board
         if: hashFiles('out/index.html') != '' && env.VERCEL_TOKEN != ''
@@ -86,6 +95,7 @@ jobs:
         run: npx --yes vercel@59.13.1 deploy out --prod --yes --token "$VERCEL_TOKEN"
 
       - name: Persist dedup state
+        if: github.event_name != 'push'
         run: |
           if [[ -n "$(git status --porcelain data/sent.json)" ]]; then
             git config user.name  "fantasy-bot"

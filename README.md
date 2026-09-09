@@ -142,6 +142,11 @@ gh workflow run "fantasy matchup scan" -f force=true
 gh run watch
 ```
 
+Pushes to `main` that change the app, team-colour data, dependencies, or this
+workflow also rebuild and deploy the production board. Push-triggered scans
+always use `--force --dry-run`: they refresh Vercel immediately but never send
+a notification or alter dedup state.
+
 Two Actions caveats: scheduled runs can be delayed 5-15 minutes under load,
 which is why a wave stays eligible from `kickoff - LEAD_MINUTES` right up to
 kickoff rather than firing in a narrow window; and GitHub disables scheduled
