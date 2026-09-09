@@ -98,12 +98,11 @@ jobs:
           # silently by `latest`.
           GITHUB_TOKEN: ""
         run: |
-          # VERCEL_ORG_ID in this step's env already selects the team, so
-          # passing --scope as well makes the CLI resolve a user and 404.
-          # The token stays out of job-level env either way.
-          deployment_url="$(npx --yes vercel@59.13.1 deploy out --prod --yes)"
-          npx --yes vercel@59.13.1 alias set "$deployment_url" fantasy-comparator.vercel.app \
-            --token "$VERCEL_TOKEN"
+          # fantasy-comparator.vercel.app is already this project's verified
+          # production domain, so a --prod deploy serves it directly. An
+          # explicit `alias set` is redundant and fails anyway: the deploy
+          # token cannot resolve a user, which that subcommand requires.
+          npx --yes vercel@59.13.1 deploy out --prod --yes
 
       - name: Persist dedup state
         if: github.event_name != 'push'
