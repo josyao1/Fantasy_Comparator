@@ -36,7 +36,14 @@ def _proteams() -> dict[int, str]:
     return table
 
 
-def fetch(league_id: str, week: int, season: str, priority: int) -> LeagueMatchup:
+def fetch(spec: str, week: int, season: str, priority: int) -> LeagueMatchup:
+    """`spec` is "leagueId" or "leagueId:teamId".
+
+    Public leagues read without cookies, so auth is attempted opportunistically
+    rather than demanded up front. An explicit teamId identifies your team
+    without SWID, which also makes the lookup deterministic.
+    """
+    league_id, _, team_hint = spec.partition(":")
     matchup = LeagueMatchup(
         platform="espn",
         league_id=league_id,
@@ -45,19 +52,21 @@ def fetch(league_id: str, week: int, season: str, priority: int) -> LeagueMatchu
         my_team="",
         opp_team="",
     )
-    if not (config.ESPN_S2 and config.SWID):
-        matchup.error = "ESPN_S2 / SWID not configured"
-        return matchup
+
+    cookies = {}
+    if config.ESPN_S2 and config.SWID:
+        cookies = {"espn_s2": config.ESPN_S2, "SWID": config.SWID}
 
     r = requests.get(
         f"{BASE}/{season}/segments/0/leagues/{league_id}",
         params=[("view", "mTeam"), ("view", "mRoster"), ("view", "mMatchup"),
-                ("scoringPeriodId", week)],
-        cookies={"espn_s2": config.ESPN_S2, "SWID": config.SWID},
+                ("view", "mSettings"), ("scoringPeriodId", week)],
+        cookies=cookies,
         timeout=30,
     )
     if r.status_code in (401, 403):
-        matchup.error = "ESPN auth rejected — espn_s2/SWID expired"
+        matchup.error = ("private league — set ESPN_S2 and SWID" if not cookies
+                         else "ESPN sign-in expired — refresh espn_s2 and SWID")
         return matchup
     r.raise_for_status()
     data = r.json()
@@ -70,14 +79,21 @@ def fetch(league_id: str, week: int, season: str, priority: int) -> LeagueMatchu
         t = teams.get(tid) or {}
         return t.get("name") or f"{t.get('location','')} {t.get('nickname','')}".strip() or f"Team {tid}"
 
-    swid = config.SWID if config.SWID.startswith("{") else "{%s}" % config.SWID
-    my_id = next(
-        (t["id"] for t in data.get("teams", [])
-         if any(o.upper() == swid.upper() for o in (t.get("owners") or []))),
-        None,
-    )
+    my_id = None
+    if team_hint.isdigit():
+        my_id = int(team_hint)
+        if my_id not in teams:
+            matchup.error = f"teamId {my_id} not in this league"
+            return matchup
+    elif config.SWID:
+        swid = config.SWID if config.SWID.startswith("{") else "{%s}" % config.SWID
+        my_id = next(
+            (t["id"] for t in data.get("teams", [])
+             if any(o.upper() == swid.upper() for o in (t.get("owners") or []))),
+            None,
+        )
     if my_id is None:
-        matchup.error = "could not identify your team from SWID"
+        matchup.error = "cannot identify your team — add ':teamId' to the league id"
         return matchup
     matchup.my_team = team_name(my_id)
 

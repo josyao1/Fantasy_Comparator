@@ -70,10 +70,12 @@ body{margin:0;background:var(--ground);color:var(--ink);
 .side{font-size:12.5px;margin-top:6px;display:flex;gap:7px;align-items:baseline}
 .side .ar{width:11px;flex:none;font-size:10px}
 .side.f{color:var(--for)} .side.a{color:var(--against)}
-.side .lg{color:var(--muted)}
+.side .lgn{color:var(--muted)}
 .fig{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums;
   font-size:22px;font-weight:600;line-height:1;flex:none;text-align:right;min-width:52px}
 .fig.neg{color:var(--against)} .fig.pos{color:var(--for)} .fig.even{color:var(--muted)}
+.fig.wash{font-size:11px;font-weight:500;letter-spacing:.13em;color:var(--faint);
+  text-transform:uppercase;padding-top:5px}
 .fig small{display:block;font-size:9.5px;letter-spacing:.13em;color:var(--faint);
   margin-top:5px;font-weight:500}
 
@@ -117,10 +119,10 @@ def _esc(s) -> str:
 
 def _fig_net(net: int) -> str:
     """Divided players only: the true stake, set as a spread."""
-    cls = "pos" if net > 0 else "neg" if net < 0 else "even"
-    txt = "EVEN" if net == 0 else f"{net:+d}"
-    size = ' style="font-size:14px"' if net == 0 else ""
-    return f'<div class="fig {cls}"{size}>{txt}<small>NET</small></div>'
+    if net == 0:
+        return '<div class="fig even wash">even</div>'
+    cls = "pos" if net > 0 else "neg"
+    return f'<div class="fig {cls}">{net:+d}<small>NET</small></div>'
 
 
 def _fig_count(n: int) -> str:
@@ -136,10 +138,10 @@ def _row(e: Exposure, mode: str = "net") -> str:
     sides = ""
     if mode == "net" and e.for_leagues:
         sides += (f'<div class="side f"><span class="ar">&#9650;</span>'
-                  f'<span>start <span class="lg">{_esc(", ".join(e.for_leagues))}</span></span></div>')
+                  f'<span>start <span class="lgn">{_esc(", ".join(e.for_leagues))}</span></span></div>')
     if e.against_leagues:
         sides += (f'<div class="side a"><span class="ar">&#9660;</span>'
-                  f'<span>face <span class="lg">{_esc(", ".join(e.against_leagues))}</span></span></div>')
+                  f'<span>face <span class="lgn">{_esc(", ".join(e.against_leagues))}</span></span></div>')
     return (
         f'<div class="row {lock}"><div class="body">'
         f'<div class="nm">{_esc(e.player.name)}</div>'
@@ -266,7 +268,8 @@ def sms_text(table: dict[str, Exposure], week: int, wave, matchups) -> str:
         names = ", ".join(e.player.name.split()[-1] for e in multi[:3])
         lines.append(f"x2: {names}")
     for e in conf[:2]:
-        lines.append(f"! {e.player.name.split()[-1]} {e.net:+d}")
+        stake = "EVEN" if e.net == 0 else f"{e.net:+d}"
+        lines.append(f"! {e.player.name.split()[-1]} {stake}")
     errs = [m for m in matchups if m.error]
     if errs:
         lines.append(f"{len(errs)} league(s) failed")

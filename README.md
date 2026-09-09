@@ -56,6 +56,17 @@ https://fantasy.espn.com/football/team?leagueId=123456789&teamId=4
                                                  ^^^^^^^^^
 ```
 
+**Public leagues need no cookies at all.** If you set a league's visibility to
+public in ESPN's league settings, it reads without credentials — which removes
+the whole cookie-expiry problem. Check with:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues/LEAGUE_ID?view=mTeam"
+```
+
+`200` means public, `401` means it needs cookies.
+
 Private leagues need cookies from a logged-in browser:
 
 1. Open **fantasy.espn.com**, then **Cmd+Option+I**
@@ -66,8 +77,16 @@ These expire every few months. When they do, the board renders an explicit
 "ESPN sign-in expired" banner and the text says how many leagues failed —
 it never silently reports a smaller threat list than is real.
 
-Your own team is detected by matching `SWID` against the league's owners, so no
-team id is needed.
+Write league ids as `leagueId:teamId` (the `teamId` is in the same URL). The
+explicit team id makes identification deterministic and is what lets public
+leagues work with no credentials at all:
+
+```
+ESPN_LEAGUES=944591:12,302220592:1,370831240:6
+```
+
+Without the `:teamId` suffix your team is matched via `SWID` instead, which
+requires cookies even for a public league.
 
 ### 3. Texting
 
