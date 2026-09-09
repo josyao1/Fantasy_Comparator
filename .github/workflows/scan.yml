@@ -1,0 +1,77 @@
+name: fantasy matchup scan
+
+# The schedule below is deliberately coarse. It does NOT encode NFL game days —
+# the job scrapes the real schedule and decides for itself whether a kickoff
+# wave is due, so Wednesday openers, Black Friday and Christmas games are all
+# covered without touching this file.
+on:
+  schedule:
+    - cron: "*/30 11-23,0-3 * 9,10,11,12,1 *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Scan and send regardless of the schedule"
+        type: boolean
+        default: false
+
+concurrency:
+  group: fantasy-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache API snapshots
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/sleeper_players.json
+            data/schedule.json
+          key: fantasy-cache-${{ github.run_id }}
+          restore-keys: fantasy-cache-
+
+      - run: pip install -r requirements.txt
+
+      - name: Scan and notify
+        env:
+          SLEEPER_USER_ID: ${{ secrets.SLEEPER_USER_ID }}
+          SLEEPER_LEAGUES: ${{ secrets.SLEEPER_LEAGUES }}
+          ESPN_LEAGUES: ${{ secrets.ESPN_LEAGUES }}
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          SWID: ${{ secrets.SWID }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PW: ${{ secrets.GMAIL_APP_PW }}
+          SMS_TO: ${{ secrets.SMS_TO }}
+          NOTIFY_BACKEND: ${{ vars.NOTIFY_BACKEND || 'sms' }}
+          BOARD_BASE_URL: ${{ vars.BOARD_BASE_URL }}
+          LEAD_MINUTES: ${{ vars.LEAD_MINUTES || '90' }}
+        run: |
+          python -m fantasy.cli run ${{ inputs.force && '--force' || '' }}
+
+      - name: Publish board
+        if: hashFiles('out/index.html') != '' && env.VERCEL_TOKEN != ''
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@latest deploy out --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Persist dedup state
+        run: |
+          if [[ -n "$(git status --porcelain data/sent.json)" ]]; then
+            git config user.name  "fantasy-bot"
+            git config user.email "actions@github.com"
+            git add data/sent.json
+            git commit -m "state: record sent wave"
+            git push
+          fi
