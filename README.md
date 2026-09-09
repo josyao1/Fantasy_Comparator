@@ -122,7 +122,30 @@ Put the `.env` values in **Settings → Secrets and variables → Actions**:
 *Variables* — `BOARD_BASE_URL`, optionally `LEAD_MINUTES` (default 90) and
 `NOTIFY_BACKEND`.
 
-Trigger a one-off from the Actions tab with **Run workflow → force**.
+Or run `./setup_actions.sh` after `gh auth login`, which reads `.env` and pipes
+each value into `gh secret set` without printing it. `VERCEL_TOKEN` comes from
+[vercel.com/account/tokens](https://vercel.com/account/tokens):
+
+```bash
+VERCEL_TOKEN=xxx ./setup_actions.sh
+```
+
+**Set Settings → Actions → General → Workflow permissions to "Read and write".**
+The job commits `data/sent.json` back to the repo; without write access the
+dedup state never persists and every run re-sends.
+
+Trigger a one-off:
+
+```bash
+gh workflow run "fantasy matchup scan" -f force=true
+gh run watch
+```
+
+Two Actions caveats: scheduled runs can be delayed 5-15 minutes under load,
+which is why a wave stays eligible from `kickoff - LEAD_MINUTES` right up to
+kickoff rather than firing in a narrow window; and GitHub disables scheduled
+workflows after 60 days of repo inactivity, so the job goes dormant over the
+offseason and needs re-enabling in August.
 
 ## Player identity
 
