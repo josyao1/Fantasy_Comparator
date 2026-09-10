@@ -129,8 +129,8 @@ body{margin:0;background:var(--bg);color:var(--ink);padding-bottom:3.5rem;
 /* ── game view: one NFL game, all three relationships ─── */
 .game-grp{margin-bottom:9px;border:1px solid var(--rule);border-radius:4px;
   background:var(--card2);overflow:hidden}
-.game-grp > summary{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
-  padding:11px 13px;cursor:pointer;list-style:none;
+.game-grp > summary{display:flex;align-items:center;gap:9px;flex-wrap:nowrap;
+  padding:10px 12px;cursor:pointer;list-style:none;
   background:linear-gradient(96deg,var(--card1) 0%,var(--card2) 70%)}
 .game-grp > summary::-webkit-details-marker{display:none}
 .game-grp > summary::before{content:"▸";color:var(--faint);font-size:11px;
@@ -138,16 +138,19 @@ body{margin:0;background:var(--bg);color:var(--ink);padding-bottom:3.5rem;
 .game-grp[open] > summary::before{transform:rotate(90deg)}
 .game-grp > summary:hover{background:var(--card1)}
 .game-grp > summary:focus-visible{outline:2px solid var(--for);outline-offset:-2px}
-.gname{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;
-  letter-spacing:-.01em;text-transform:uppercase}
-.tlogo{width:26px;height:26px;object-fit:contain;flex:none}
+.gname{display:flex;align-items:center;gap:6px;font-weight:700;font-size:17px;
+  letter-spacing:-.01em;text-transform:uppercase;flex:none}
+.tlogo{width:24px;height:24px;object-fit:contain;flex:none}
 .tabbr{font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.02em}
 .gat{color:var(--faint);font-size:12px;font-weight:500}
-.gtime{font:500 10.5px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.13em;
-  color:var(--mut);text-transform:uppercase}
-.gtally{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap}
-.gt{font:700 9.5px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em;
-  padding:4px 6px;border-radius:2px;text-transform:uppercase;white-space:nowrap}
+.gtime{font:500 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.06em;
+  color:var(--mut);text-transform:uppercase;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;min-width:0}
+.gtally{margin-left:auto;display:flex;gap:4px;flex-wrap:nowrap;flex:none}
+.gt{display:inline-flex;align-items:center;gap:3px;
+  font:700 11px/1 ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums;
+  padding:4px 6px;border-radius:2px;white-space:nowrap}
+.gsym{font-size:11px;line-height:1}
 .gt.cheer{background:rgba(72,201,232,.16);color:var(--for)}
 .gt.divided{background:rgba(255,176,32,.16);color:var(--amber)}
 .gt.against{background:rgba(255,107,53,.16);color:var(--against)}
@@ -175,7 +178,7 @@ body{margin:0;background:var(--bg);color:var(--ink);padding-bottom:3.5rem;
 footer{margin-top:32px;padding-top:13px;border-top:1px solid var(--rule);
   font:400 10.5px/1.6 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.09em;
   color:var(--faint)}
-@media (max-width:420px){
+@media (max-width:440px){
   .thesis{font-size:33px} .nm{font-size:20px} .fg{font-size:26px}
   .card .ph,.card .noph{width:58px}
 }
@@ -343,18 +346,31 @@ body.thin .fl{font-size:7px;margin-top:2px}body.thin .chev,body.thin .detail{dis
   border:1px dashed var(--rule);border-radius:var(--radius);font-family:var(--body);font-style:normal}
 .err{font-size:14px;border-radius:var(--radius);font-family:var(--body)}
 footer{font-size:12px;letter-spacing:.035em;color:var(--faint)}
-@media(max-width:420px){
+@media(max-width:440px){
   .wrap{padding-left:12px;padding-right:12px}.thesis{font-size:35px}.legend{grid-template-columns:1fr}
   .bar{grid-template-columns:48px 1fr}.bar button{padding-left:10px;padding-right:10px}
   .card-main{grid-template-columns:58px minmax(0,1fr) auto 22px}.nm{font-size:19px}.fg{font-size:24px}.fig{min-width:45px}
-  .control-strip{grid-template-columns:repeat(3,minmax(0,1fr)) 58px;padding:6px;gap:4px}
-  .select-control select{padding-left:6px;font-size:11px}.thin-toggle{min-width:58px}.thin-toggle span{padding:0 5px;font-size:11px}
+  /* Four controls across a 390px screen leaves ~94px each, and the base rule's
+     23px right padding eats a quarter of that. Two rows of two gives each
+     control room for its longest label. */
+  .control-strip{grid-template-columns:repeat(2,minmax(0,1fr));padding:6px;gap:6px}
+  .select-control select{padding:0 20px 0 7px;font-size:12px;text-overflow:ellipsis}
+  .thin-toggle{min-width:0}.thin-toggle span{padding:0 6px;font-size:12px}
+  /* "32 of 32 selected" cannot share a row at this width. */
+  .filter-drawers{grid-template-columns:1fr;gap:6px}
+  /* 8 team chips across is ~40px each; 5 keeps the abbreviations legible. */
+  .team-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .scope-tabs button{font-size:12px;padding:6px 3px}.scope-tabs small{font-size:8.5px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 """
 
 FONT_LINK = ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
              'family=Barlow+Condensed:wght@500;600;700;800&display=swap">')
+
+
+def _plural(n: int) -> str:
+    return f"{n} player" if n == 1 else f"{n} players"
 
 
 def _esc(s) -> str:
@@ -527,9 +543,9 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
     p.append('</div>')
 
     p.append('<nav class="scope-tabs" aria-label="Player view">'
-             f'<button data-scope="against" aria-pressed="true">Against<small>{len(facing)} players</small></button>'
-             f'<button data-scope="cheer" aria-pressed="false">Cheer for<small>{len(cheering)} players</small></button>'
-             f'<button data-scope="overlap" aria-pressed="false">Divided<small>{len(conf)} players</small></button>'
+             f'<button data-scope="against" aria-pressed="true">Against<small>{_plural(len(facing))}</small></button>'
+             f'<button data-scope="cheer" aria-pressed="false">Cheer for<small>{_plural(len(cheering))}</small></button>'
+             f'<button data-scope="overlap" aria-pressed="false">Divided<small>{_plural(len(conf))}</small></button>'
              '</nav>')
 
     if errs:
@@ -984,15 +1000,24 @@ JS = r"""
         sum.appendChild(gameTitle(g));
         sum.appendChild(el("span", "gtime", els[0].dataset.wave));
         var tally = el("span", "gtally");
-        [["cheer", buckets.cheer.length, "cheer"],
-         ["divided", buckets.divided.length, "divided"],
-         ["against", buckets.against.length, "against"]].forEach(function(t){
+        // Words wrapped the summary onto three lines on a phone. The symbol
+        // carries the same meaning in a quarter of the width; the full wording
+        // stays in the title and aria-label for anyone who needs it.
+        [["cheer", buckets.cheer.length, "\u2713", "cheering for"],
+         ["divided", buckets.divided.length, "=", "divided on"],
+         ["against", buckets.against.length, "\u2717", "rooting against"]].forEach(function(t){
           if(!t[1]) return;
-          var chip = el("span", "gt " + t[0], t[1] + " " + t[2]);
+          var chip = el("span", "gt " + t[0], null);
+          chip.appendChild(el("span", "gsym", t[2]));
+          chip.appendChild(document.createTextNode(String(t[1])));
+          chip.title = t[1] + " " + t[3];
+          chip.setAttribute("aria-label", t[1] + " " + t[3]);
           tally.appendChild(chip);
         });
         if(isFinished(els[0].dataset.ts)){
-          tally.appendChild(el("span", "gt final", "final"));
+          var fin = el("span", "gt final", "\u25CF");
+          fin.title = "final"; fin.setAttribute("aria-label", "final");
+          tally.appendChild(fin);
         }
         sum.appendChild(tally);
         det.appendChild(sum);
