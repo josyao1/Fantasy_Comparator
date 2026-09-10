@@ -170,6 +170,20 @@ def day_waves(season: str, week: int, force: bool = False) -> list[Wave]:
     return out
 
 
+def game_by_team(season: str, week: int) -> dict[str, str]:
+    """Map each team to its game label, e.g. {"CIN": "TB @ CIN"}.
+
+    Finer-grained than a kickoff wave: eight games share the Sunday 1:00pm
+    slot, and when you are watching one of them you want only that field.
+    """
+    out: dict[str, str] = {}
+    for game in load_schedule(season).get(week, []):
+        label = f"{game.away} @ {game.home}"
+        for team in game.teams:
+            out[team] = label
+    return out
+
+
 def kickoff_by_team(season: str, week: int) -> dict[str, datetime]:
     """Map each NFL team abbreviation to its kickoff — drives per-player lock state."""
     out: dict[str, datetime] = {}

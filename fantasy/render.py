@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 from . import config, ledger
 from .headshots import rail_color, url_for
 from .leagues import assign as assign_leagues
+from .rankings import UNRANKED, label as rank_label
 from .models import Exposure, LeagueMatchup
 
 DISPLAY_TZ = ZoneInfo(config.DISPLAY_TIMEZONE)
@@ -90,7 +91,6 @@ body{margin:0;background:var(--bg);color:var(--ink);padding-bottom:3.5rem;
 .card{position:relative;display:flex;align-items:stretch;gap:0;margin-bottom:6px;
   background:linear-gradient(96deg,var(--card1) 0%,var(--card2) 66%);
   border-left:4px solid var(--tc,#FFB020);overflow:hidden;min-height:74px}
-.card.lk{filter:saturate(.2);opacity:.55}
 .card .ph{width:70px;flex:none;object-fit:cover;object-position:top center;
   background:#0E1620;align-self:stretch}
 .card .noph{width:70px;flex:none;background:#0E1620;display:flex;align-items:center;
@@ -126,6 +126,46 @@ body{margin:0;background:var(--bg);color:var(--ink);padding-bottom:3.5rem;
   color:var(--faint);margin-top:5px}
 
 /* ── errors + empties ─────────────────────────────────── */
+/* ── game view: one NFL game, all three relationships ─── */
+.game-grp{margin-bottom:9px;border:1px solid var(--rule);border-radius:4px;
+  background:var(--card2);overflow:hidden}
+.game-grp > summary{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  padding:11px 13px;cursor:pointer;list-style:none;
+  background:linear-gradient(96deg,var(--card1) 0%,var(--card2) 70%)}
+.game-grp > summary::-webkit-details-marker{display:none}
+.game-grp > summary::before{content:"▸";color:var(--faint);font-size:11px;
+  flex:none;transition:transform .12s ease}
+.game-grp[open] > summary::before{transform:rotate(90deg)}
+.game-grp > summary:hover{background:var(--card1)}
+.game-grp > summary:focus-visible{outline:2px solid var(--for);outline-offset:-2px}
+.gname{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;
+  letter-spacing:-.01em;text-transform:uppercase}
+.tlogo{width:26px;height:26px;object-fit:contain;flex:none}
+.tabbr{font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.02em}
+.gat{color:var(--faint);font-size:12px;font-weight:500}
+.gtime{font:500 10.5px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.13em;
+  color:var(--mut);text-transform:uppercase}
+.gtally{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap}
+.gt{font:700 9.5px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em;
+  padding:4px 6px;border-radius:2px;text-transform:uppercase;white-space:nowrap}
+.gt.cheer{background:rgba(72,201,232,.16);color:var(--for)}
+.gt.divided{background:rgba(255,176,32,.16);color:var(--amber)}
+.gt.against{background:rgba(255,107,53,.16);color:var(--against)}
+.gt.locked{background:transparent;color:var(--faint);
+  box-shadow:inset 0 0 0 1px var(--rule)}
+.gt.final{background:transparent;color:var(--faint);
+  box-shadow:inset 0 0 0 1px var(--rule)}
+.game-grp.done > summary .gname{opacity:.72}
+.game-grp.done > summary .tlogo{filter:grayscale(.85)}
+.gsec{padding:2px 10px 9px}
+.gsec > h3{margin:11px 0 6px;font:600 10px/1 ui-monospace,"SF Mono",Menlo,monospace;
+  letter-spacing:.19em;text-transform:uppercase}
+.gsec.cheer > h3{color:var(--for)}
+.gsec.divided > h3{color:var(--amber)}
+.gsec.against > h3{color:var(--against)}
+.rk{font:600 9.5px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.08em;
+  color:var(--faint);padding:2px 4px;border-radius:2px;
+  box-shadow:inset 0 0 0 1px var(--rule)}
 .err{background:var(--warnbg);border:1px solid var(--warn);border-left-width:4px;
   color:var(--warn);padding:10px 13px;margin-bottom:6px;font-size:13.5px;
   font-family:system-ui,sans-serif}
@@ -255,8 +295,6 @@ button:focus-visible{outline:3px solid var(--for);outline-offset:2px}
 .card .ph,.card .noph{width:100%;height:100%;min-height:76px;background:var(--surface2)}
 .card .ph{object-fit:cover;object-position:top center;align-self:stretch}
 .card .noph{display:flex;align-items:center;justify-content:center;font:800 22px/1 var(--display);color:var(--faint)}
-.card.lk{filter:none;opacity:1;border-style:dashed}.card.lk .ph{filter:grayscale(1);opacity:.48}
-.card.lk .nm{color:var(--mut)}
 .card .body{padding:9px 6px 8px 10px}.nm{font-family:var(--display);font-size:21px;font-weight:800;line-height:1.02}
 .mt{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;line-height:1.25;
   font-weight:650;letter-spacing:.025em;color:var(--mut);margin-top:4px}
@@ -344,6 +382,8 @@ def _card(e: Exposure) -> str:
     kick = e.kickoff.astimezone(DISPLAY_TZ) if e.kickoff else None
     wave = (f"{kick:%a} {kick:%-I:%M%p} {config.DISPLAY_TZ_LABEL}"
             .replace("AM", "am").replace("PM", "pm") if kick else "TBD")
+    rank_badge = (f'<span class="rk" title="Rest-of-season consensus rank">'
+                  f'{rank_label(e.rank)}</span>') if e.rank < UNRANKED else ''
     meta = f'{e.player.position} &middot; {e.player.team}'
     if kick:
         meta += f' &middot; {wave}'
@@ -397,7 +437,7 @@ def _card(e: Exposure) -> str:
 
     against_json = _esc(json.dumps(e.against_leagues))
     for_json = _esc(json.dumps(e.for_leagues))
-    lock_badge = '<span class="lock">Locked</span>' if e.locked else ''
+    lock_badge = ''   # kickoff time already conveys this; a badge added noise
     overlap_badge = (f'<span class="overlap-badge"'
                      f'{"" if e.is_conflict else " hidden"}>Overlap</span>')
 
@@ -408,13 +448,14 @@ def _card(e: Exposure) -> str:
         f' data-exp="{len(e.against_leagues)}" data-net="{e.net}"'
         f' data-name="{_esc(e.player.name)}" data-pos="{_esc(e.player.position)}"'
         f' data-team="{_esc(e.player.team)}"'
+        f' data-rank="{e.rank}" data-game="{_esc(e.game or "TBD")}"'
         f' data-wave="{_esc(wave)}" data-ts="{kick.isoformat() if kick else "9999"}"'
         f' data-locked="{"1" if e.locked else "0"}"'
         f' data-against="{against_json}" data-for="{for_json}">'
         f'<button class="card-main" type="button" aria-expanded="false" '
         f'aria-label="Show why {_esc(e.player.name)} matters">'
         f'{photo}<div class="body"><div class="nm" data-short="{_esc(short_name)}">{_esc(e.player.name)}</div>'
-        f'<div class="mt"><span>{meta}</span>{lock_badge}{overlap_badge}</div>'
+        f'<div class="mt"><span>{meta}</span>{rank_badge}{lock_badge}{overlap_badge}</div>'
         f'<div class="side">{sides}</div></div>'
         f'<div class="fig">{_fig(e)}</div><span class="chev" aria-hidden="true">⌄</span></button>'
         f'<div class="detail" hidden>{"".join(detail)}</div></article>'
@@ -499,9 +540,11 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
           '<div class="control-strip">',
           '<label class="select-control"><span>Group</span><select data-view-select aria-label="Group players">'
           '<option value="threat">Threat</option><option value="kickoff">Kickoff</option>'
-          '<option value="league">League</option></select></label>',
+          '<option value="league">League</option>'
+          '<option value="game" selected>Game</option></select></label>',
           '<label class="select-control"><span>Sort</span><select data-sort-select aria-label="Sort players">'
           '<option value="exp">Impact</option><option value="time">Kickoff</option>'
+          '<option value="rank">Ranking</option>'
           '<option value="name">Name</option><option value="pos">Position</option></select></label>',
           '<label class="select-control"><span>Show</span><select data-filter-select aria-label="Filter players">'
           '<option value="all">All</option><option value="open">Open</option><option value="QB">QB</option>'
@@ -570,7 +613,7 @@ JS = r"""
   var sourceCards = Array.prototype.slice.call(source.content.querySelectorAll(".card"))
     .map(function(c){ return c.cloneNode(true); });
   var leagueMeta = JSON.parse(document.getElementById("meta").textContent).leagues;
-  var scope = "against", view = "threat", sort = "exp", filter = "all";
+  var scope = "against", view = "game", sort = "exp", filter = "all";
 
   function jsonList(card, key){
     try { return JSON.parse(card.dataset[key] || "[]"); }
@@ -604,15 +647,17 @@ JS = r"""
   }
 
   function belongs(mine, against, wantedScope){
+    if(wantedScope === "any") return mine.length > 0 || against.length > 0;
     if(wantedScope === "cheer") return mine.length > 0;
     if(wantedScope === "overlap") return mine.length > 0 && against.length > 0;
     return against.length > 0;
   }
 
-  function prepareCard(sourceCard, selected){
+  function prepareCard(sourceCard, selected, scopeOverride){
+    var useScope = scopeOverride || scope;
     var mine = jsonList(sourceCard, "for").filter(function(name){ return selected.has(name); });
     var against = jsonList(sourceCard, "against").filter(function(name){ return selected.has(name); });
-    if(!belongs(mine, against, scope)) return null;
+    if(!belongs(mine, against, useScope)) return null;
 
     var card = sourceCard.cloneNode(true);
     var conflict = mine.length > 0 && against.length > 0;
@@ -743,13 +788,36 @@ JS = r"""
     });
   }
 
+  // Rest-of-season rank breaks ties. Unranked players carry a sentinel that
+  // sorts them last rather than dropping them.
+  // An NFL game runs about three hours. Past that it is history, so it sinks
+  // below anything still live or upcoming.
+  var GAME_RUNTIME_MS = 3 * 60 * 60 * 1000;
+
+  function kickoffMs(ts){
+    if(!ts || ts === "9999") return Infinity;
+    var t = Date.parse(ts);
+    return isNaN(t) ? Infinity : t;
+  }
+
+  function isFinished(ts){
+    var k = kickoffMs(ts);
+    return k !== Infinity && Date.now() >= k + GAME_RUNTIME_MS;
+  }
+
+  function byRank(a, b){
+    return (+a.dataset.rank - +b.dataset.rank)
+        || a.dataset.name.localeCompare(b.dataset.name);
+  }
+
   var CMP = {
     exp:  function(a,b){ return (+b.dataset.impact - +a.dataset.impact)
                              || (+a.dataset.net - +b.dataset.net)
-                             || a.dataset.name.localeCompare(b.dataset.name); },
+                             || byRank(a,b); },
     time: function(a,b){ return a.dataset.ts.localeCompare(b.dataset.ts)
-                             || a.dataset.name.localeCompare(b.dataset.name); },
+                             || byRank(a,b); },
     name: function(a,b){ return a.dataset.name.localeCompare(b.dataset.name); },
+    rank: byRank,
     pos:  function(a,b){ var o={QB:0,RB:1,WR:2,TE:3};
                          return (o[a.dataset.pos]-o[b.dataset.pos])
                              || a.dataset.name.localeCompare(b.dataset.name); }
@@ -760,6 +828,37 @@ JS = r"""
     if(cls) n.className = cls;
     if(text != null) n.textContent = text;   // never innerHTML: names are untrusted
     return n;
+  }
+
+  // ESPN's own abbreviations come straight off the schedule, so they double
+  // as logo slugs. WAS is the one normalisation that has to be undone.
+  function logoSlug(team){
+    var t = (team || "").toLowerCase();
+    return t === "was" ? "wsh" : t;
+  }
+
+  function teamLogo(team){
+    var img = document.createElement("img");
+    img.className = "tlogo";
+    img.alt = team;
+    img.loading = "lazy";
+    img.src = "https://a.espncdn.com/i/teamlogos/nfl/500-dark/" + logoSlug(team) + ".png";
+    // If the logo will not load, fall back to the abbreviation rather than a gap.
+    img.addEventListener("error", function(){
+      var span = el("span", "tabbr", team);
+      if(img.parentNode) img.parentNode.replaceChild(span, img);
+    });
+    return img;
+  }
+
+  function gameTitle(label){
+    var wrap = el("span", "gname", null);
+    var parts = String(label).split(" @ ");
+    if(parts.length !== 2){ wrap.textContent = label; return wrap; }
+    wrap.appendChild(teamLogo(parts[0]));
+    wrap.appendChild(el("span", "gat", "@"));
+    wrap.appendChild(teamLogo(parts[1]));
+    return wrap;
   }
 
   function group(title, count, note, els, status, color){
@@ -806,6 +905,108 @@ JS = r"""
         var shut = els[0].dataset.locked === "1";
         stage.appendChild(group(w, els.length, "", els,
           { cls: shut ? "shut" : "open", text: shut ? "locked" : "still open" }));
+      });
+      return;
+    }
+
+    if(view === "game"){
+      // Deliberately ignores the scope selector: the point of this view is to
+      // see who you cheer for, who you face, and who is both, in one game.
+      var selectedNames = selectedLeagues();
+      var teamsPicked = selectedTeams();
+      var everyone = sourceCards
+        .map(function(c){ return prepareCard(c, selectedNames, "any"); })
+        .filter(function(c){ return c !== null && teamsPicked.has(c.dataset.team); })
+        .filter(function(c){
+          if(filter === "open") return c.dataset.locked !== "1";
+          if(filter !== "all") return c.dataset.pos === filter;
+          return true;
+        });
+
+      var gameOrder = [], byGame = {};
+      everyone.forEach(function(c){
+        var g = c.dataset.game || "TBD";
+        if(!byGame[g]){ byGame[g] = []; gameOrder.push(g); }
+        byGame[g].push(c);
+      });
+      gameOrder.sort(function(a,b){
+        var fa = isFinished(byGame[a][0].dataset.ts) ? 1 : 0;
+        var fb = isFinished(byGame[b][0].dataset.ts) ? 1 : 0;
+        return (fa - fb)
+            || byGame[a][0].dataset.ts.localeCompare(byGame[b][0].dataset.ts)
+            || a.localeCompare(b);
+      });
+
+      if(!gameOrder.length){ empty("No games match the current filters."); return; }
+
+      // Rebuilds are triggered by filters and by the minute tick, so an
+      // expanded game must survive them.
+      var openGames = new Set(
+        Array.prototype.slice.call(stage.querySelectorAll(".game-grp[open]"))
+          .map(function(d){ return d.dataset.game; }));
+
+      // data-impact is computed under the active scope, which this view
+      // ignores, so each bucket is ranked on the league count that actually
+      // applies to it: starts for cheering, opposing shares for against, and
+      // both sides for divided. Ranking only breaks the remaining ties.
+      function stakeIn(card, bucket){
+        var mine = jsonList(card, "for").length;
+        var opp = jsonList(card, "against").length;
+        if(bucket === "cheer") return mine;
+        if(bucket === "against") return opp;
+        return mine + opp;
+      }
+      function bucketOrder(bucket){
+        return function(a, b){
+          if(sort !== "exp") return CMP[sort](a, b);
+          return (stakeIn(b, bucket) - stakeIn(a, bucket)) || byRank(a, b);
+        };
+      }
+
+      gameOrder.forEach(function(g){
+        var els = byGame[g];
+        var buckets = { cheer: [], divided: [], against: [] };
+        els.forEach(function(c){
+          var mine = jsonList(c, "for").length, opp = jsonList(c, "against").length;
+          if(mine && opp) buckets.divided.push(c);
+          else if(mine) buckets.cheer.push(c);
+          else buckets.against.push(c);
+        });
+        Object.keys(buckets).forEach(function(k){
+          buckets[k].sort(bucketOrder(k));
+        });
+
+        var det = el("details", "game-grp");
+        det.dataset.game = g;
+        if(openGames.has(g)) det.open = true;
+        if(isFinished(els[0].dataset.ts)) det.classList.add("done");
+        var sum = el("summary", null, null);
+        sum.appendChild(gameTitle(g));
+        sum.appendChild(el("span", "gtime", els[0].dataset.wave));
+        var tally = el("span", "gtally");
+        [["cheer", buckets.cheer.length, "cheer"],
+         ["divided", buckets.divided.length, "divided"],
+         ["against", buckets.against.length, "against"]].forEach(function(t){
+          if(!t[1]) return;
+          var chip = el("span", "gt " + t[0], t[1] + " " + t[2]);
+          tally.appendChild(chip);
+        });
+        if(isFinished(els[0].dataset.ts)){
+          tally.appendChild(el("span", "gt final", "final"));
+        }
+        sum.appendChild(tally);
+        det.appendChild(sum);
+
+        [["cheer", "Cheering for", buckets.cheer],
+         ["divided", "Divided", buckets.divided],
+         ["against", "Rooting against", buckets.against]].forEach(function(b){
+          if(!b[2].length) return;
+          var sec = el("div", "gsec " + b[0]);
+          sec.appendChild(el("h3", null, b[1] + " · " + b[2].length));
+          b[2].forEach(function(c){ sec.appendChild(c); });
+          det.appendChild(sec);
+        });
+        stage.appendChild(det);
       });
       return;
     }
@@ -891,6 +1092,9 @@ JS = r"""
     });
   });
   var viewSelect = document.querySelector("[data-view-select]");
+  // A browser restoring a previous <select> value would otherwise disagree
+  // with the default held in `view`.
+  if(viewSelect) viewSelect.value = view;
   var sortSelect = document.querySelector("[data-sort-select]");
   var filterSelect = document.querySelector("[data-filter-select]");
   viewSelect.addEventListener("change", function(){ view = viewSelect.value; build(); });
@@ -947,8 +1151,24 @@ JS = r"""
     else label.textContent = Math.floor(mins / 60) + "h " + (mins % 60) + "m";
   }
   build();
+  // Rebuilding every minute would fight the user by collapsing games, so the
+  // tick only rebuilds when a game has actually crossed the finish mark.
+  function finishedSignature(){
+    return sourceCards.map(function(c){
+      return isFinished(c.dataset.ts) ? "1" : "0";
+    }).join("");
+  }
+  var lastFinished = finishedSignature();
+
   updateCountdown();
-  setInterval(updateCountdown, 60000);
+  setInterval(function(){
+    updateCountdown();
+    var now = finishedSignature();
+    if(now !== lastFinished){
+      lastFinished = now;
+      build();
+    }
+  }, 60000);
 })();
 """
 

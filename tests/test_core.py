@@ -257,3 +257,43 @@ def test_thin_mode_is_persistent_and_disables_card_dropdowns():
     assert "body.thin .stake-kind{display:none}" in render.CSS
     assert 'body.thin .card.has-overlap .stake-row:has(.stake-kind.for) .chip:after{content:"✓"' in render.CSS
     assert 'body.thin .card.has-overlap .stake-row:has(.stake-kind.against) .chip:after{content:"×"' in render.CSS
+
+
+# ── ranking tiebreak ──────────────────────────────────────────────────────
+from fantasy import rankings
+
+
+def test_unranked_players_are_kept_and_sort_last():
+    ranked = Player("Christian McCaffrey", "RB", "SF")       # ROS #9
+    unranked = Player("Practice Squad Guy", "WR", "NYJ")     # not in the list
+    table = ledger.build([
+        _matchup("L1", [], [ranked, unranked]),
+        _matchup("L2", [], [ranked, unranked]),
+    ], {}, NOW)
+    order = ledger.multi_exposure(table)
+    assert len(order) == 2, "an unranked player must never be dropped"
+    assert order[0].player.name == "Christian McCaffrey"
+    assert order[1].player.name == "Practice Squad Guy"
+    assert order[1].rank == rankings.UNRANKED
+
+
+def test_equal_exposure_breaks_on_ranking():
+    # Both faced in exactly 2 leagues; Chase (#4) must outrank McCaffrey (#9).
+    chase = Player("Ja'Marr Chase", "WR", "CIN")
+    cmc = Player("Christian McCaffrey", "RB", "SF")
+    table = ledger.build([
+        _matchup("L1", [], [cmc, chase]),
+        _matchup("L2", [], [cmc, chase]),
+    ], {}, NOW)
+    assert [e.player.name for e in ledger.multi_exposure(table)] == \
+        ["Ja'Marr Chase", "Christian McCaffrey"]
+
+
+def test_suffixes_do_not_break_ranking_lookup():
+    assert rankings.rank_for("James Cook III", "RB") == rankings.rank_for("James Cook", "RB")
+    assert rankings.rank_for("Travis Etienne Jr.", "RB") < rankings.UNRANKED
+
+
+def test_position_must_match_for_a_ranking():
+    # Same name at the wrong position must not inherit someone else's rank.
+    assert rankings.rank_for("Ja'Marr Chase", "RB") == rankings.UNRANKED

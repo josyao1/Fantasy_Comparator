@@ -8,11 +8,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from .models import Exposure, LeagueMatchup
+from .rankings import rank_for
 from . import config
 
 
 def build(matchups: list[LeagueMatchup], kickoffs: dict[str, datetime],
-          now: datetime) -> dict[str, Exposure]:
+          now: datetime, games: dict[str, str] | None = None) -> dict[str, Exposure]:
     """Collapse every league's lineups into one exposure table keyed by player."""
     table: dict[str, Exposure] = {}
 
@@ -26,6 +27,8 @@ def build(matchups: list[LeagueMatchup], kickoffs: dict[str, datetime],
                 player=player,
                 kickoff=kickoff,
                 locked=bool(kickoff and now >= kickoff),
+                rank=rank_for(player.name, player.position),
+                game=(games or {}).get(player.team, ""),
             )
             table[player.key] = exp
         target = exp.for_leagues if side == "for" else exp.against_leagues
@@ -48,7 +51,7 @@ def conflicts(table: dict[str, Exposure]) -> list[Exposure]:
     # sort first (most underwater leading), and even ones trail.
     return sorted(
         (e for e in table.values() if e.is_conflict),
-        key=lambda e: (e.net == 0, e.net, -len(e.against_leagues)),
+        key=lambda e: (e.net == 0, e.net, -len(e.against_leagues), e.rank),
     )
 
 
@@ -56,7 +59,7 @@ def multi_exposure(table: dict[str, Exposure]) -> list[Exposure]:
     """Players facing you in 2+ leagues at once, excluding ones already flagged."""
     return sorted(
         (e for e in table.values() if e.is_multi and not e.is_conflict),
-        key=lambda e: (-len(e.against_leagues), e.player.name),
+        key=lambda e: (-len(e.against_leagues), e.rank, e.player.name),
     )
 
 
@@ -64,5 +67,5 @@ def single_exposure(table: dict[str, Exposure]) -> list[Exposure]:
     return sorted(
         (e for e in table.values()
          if len(e.against_leagues) == 1 and not e.is_conflict),
-        key=lambda e: (e.against_leagues[0], e.player.position, e.player.name),
+        key=lambda e: (e.against_leagues[0], e.rank, e.player.name),
     )

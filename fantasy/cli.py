@@ -56,7 +56,8 @@ def scan(wave: schedule.Wave | None, now: datetime):
     week, season = schedule.current_week()
     matchups = collect(week, season)
     kickoffs = schedule.kickoff_by_team(season, week)
-    table = ledger.build(matchups, kickoffs, now)
+    table = ledger.build(matchups, kickoffs, now,
+                         schedule.game_by_team(season, week))
     html = render.board(matchups, table, week, wave, now)
     config.OUT.mkdir(parents=True, exist_ok=True)
     path = config.OUT / "index.html"

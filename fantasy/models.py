@@ -41,6 +41,8 @@ class Exposure:
     against_leagues: list[str] = field(default_factory=list)
     kickoff: datetime | None = None
     locked: bool = False
+    rank: int = 9999          # rest-of-season consensus; ties break on this
+    game: str = ""            # "TB @ CIN" — the NFL game he plays in
 
     @property
     def net(self) -> int:
