@@ -93,16 +93,38 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          BOARD_BASE_URL: ${{ vars.BOARD_BASE_URL }}
           # This step runs third-party code. Withhold the job's repo-write
           # token from it, and pin the CLI so a bad release cannot be pulled in
           # silently by `latest`.
           GITHUB_TOKEN: ""
         run: |
-          # fantasy-comparator.vercel.app is already this project's verified
-          # production domain, so a --prod deploy serves it directly. An
-          # explicit `alias set` is redundant and fails anyway: the deploy
-          # token cannot resolve a user, which that subcommand requires.
-          npx --yes vercel@59.13.1 deploy out --prod --yes
+          # `vercel deploy --prod` only auto-aliases the team-scoped hostname,
+          # not the short public domain, so the alias has to be set explicitly.
+          # The CLI's `alias set` resolves a user, which a project deploy token
+          # cannot do ("User not found"), but the REST API authenticates on the
+          # token alone. The token is fed to curl via stdin so it never reaches
+          # argv, where a process listing would expose it.
+          set -euo pipefail
+          deployment_url="$(npx --yes vercel@59.13.1 deploy out --prod --yes)"
+          host="${deployment_url#https://}"
+          alias_host="${BOARD_BASE_URL#https://}"
+          alias_host="${alias_host%/}"
+          echo "aliasing $alias_host -> $host"
+          response="$(printf 'header = "Authorization: Bearer %s"\n' "$VERCEL_TOKEN" \
+            | curl -sS --config - \
+                -X POST "https://api.vercel.com/v2/deployments/$host/aliases?teamId=$VERCEL_ORG_ID" \
+                -H "Content-Type: application/json" \
+                -d "{\"alias\":\"$alias_host\"}")"
+          echo "$response" | head -c 400
+          # A failed alias silently strands the board on an old build, so fail loudly.
+          # `grep -q` returning 1 on the happy path would trip `set -e`, so
+          # the check has to be a real conditional.
+          if echo "$response" | grep -q '"error"'; then
+            echo "::error::alias failed"
+            exit 1
+          fi
+          echo "alias ok"
 
       - name: Persist dedup state
         if: github.event_name != 'push'
