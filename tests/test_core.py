@@ -199,6 +199,34 @@ def test_derived_views_always_rebuild_from_immutable_cards():
     assert 'stage.querySelectorAll(".card")' not in build
 
 
+def test_every_sort_and_grouping_keeps_played_players_at_the_bottom():
+    assert "function playedLast(inner)" in render.JS
+    comparators = render.JS.split("var CMP = {")[1].split("};", 1)[0]
+    assert comparators.count("playedLast(") == 5
+    assert "return playedOrder(byWave[a][0], byWave[b][0])" in render.JS
+    assert "return playedOrder(byGame[a][0], byGame[b][0])" in render.JS
+    assert 'var played = all.filter(hasPlayed);' in render.JS
+    assert 'group("Played", played.length, "Kickoff has passed."' in render.JS
+    assert 'return isFinished(c.dataset.ts) ? "2" : (hasPlayed(c) ? "1" : "0");' in render.JS
+
+
+def test_no_script_fallback_also_puts_played_players_last(monkeypatch):
+    monkeypatch.setattr(render, "url_for", lambda *_: None)
+    matchups = [
+        _matchup("L1", [], [CHASE, CMC]),
+        _matchup("L2", [], [CHASE]),
+    ]
+    table = ledger.build(
+        matchups,
+        {"CIN": NOW - timedelta(minutes=1), "SF": NOW + timedelta(hours=1)},
+        NOW,
+    )
+    html = render.board(matchups, table, 1, None, NOW)
+    stage = html.split('<div id="stage">')[1].split('<template id="card-source">')[0]
+    assert stage.index('data-name="Christian McCaffrey"') < stage.index("data-name=\"Ja&#x27;Marr Chase\"")
+    assert "<h2>Played " in stage
+
+
 def test_league_toggles_recompute_exposure_instead_of_only_hiding_cards():
     assert "function prepareCard" in render.JS
     assert 'card.dataset.tier = against.length >= 2 ? "multi" : "single"' in render.JS

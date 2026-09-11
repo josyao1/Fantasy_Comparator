@@ -490,9 +490,14 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
     conf = ledger.conflicts(table)
     facing = [e for e in table.values() if e.against_leagues]
     multi = sorted((e for e in facing if len(e.against_leagues) >= 2),
-                   key=lambda e: (-len(e.against_leagues), e.player.name))
+                   key=lambda e: (e.locked, -len(e.against_leagues), e.player.name))
     single = sorted((e for e in facing if len(e.against_leagues) == 1),
-                    key=lambda e: e.player.name)
+                    key=lambda e: (e.locked, e.player.name))
+    played = sorted((e for e in facing if e.locked),
+                    key=lambda e: (e.kickoff or datetime.max.replace(tzinfo=DISPLAY_TZ),
+                                   e.player.name))
+    open_multi = [e for e in multi if not e.locked]
+    open_single = [e for e in single if not e.locked]
     open_n = sum(1 for e in facing if not e.locked)
     next_times = sorted(e.kickoff for e in facing if not e.locked and e.kickoff)
     next_at = next_times[0] if next_times else None
@@ -513,7 +518,7 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
                     "color": LEAGUES[m.league_name]["color"]} for m in ok]
     relevant = sorted(
         (e for e in table.values() if e.for_leagues or e.against_leagues),
-        key=lambda e: (-len(e.against_leagues), e.player.name),
+        key=lambda e: (e.locked, -len(e.against_leagues), e.player.name),
     )
     cheering = [e for e in relevant if e.for_leagues]
 
@@ -587,13 +592,16 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
     p += ['</div></details></div></div>',
           '<div id="stage">']
 
-    p.append(_group("Doubled up", len(multi),
+    p.append(_group("Doubled up", len(open_multi),
                     "One big game costs you more than one matchup.",
-                    "".join(_card(e) for e in multi),
+                    "".join(_card(e) for e in open_multi),
                     "Nobody is facing you in two leagues."))
-    p.append(_group("Facing", len(single), "",
-                    "".join(_card(e) for e in single),
+    p.append(_group("Facing", len(open_single), "",
+                    "".join(_card(e) for e in open_single),
                     "No other skill starters against you."))
+    if played:
+        p.append(_group("Played", len(played), "Kickoff has passed.",
+                        "".join(_card(e) for e in played), ""))
     p.append('</div>')
     p.append('<template id="card-source">')
     p.extend(_card(e) for e in relevant)
@@ -676,6 +684,9 @@ JS = r"""
     if(!belongs(mine, against, useScope)) return null;
 
     var card = sourceCard.cloneNode(true);
+    var played = hasPlayed(sourceCard);
+    card.dataset.locked = played ? "1" : "0";
+    card.classList.toggle("lk", played);
     var conflict = mine.length > 0 && against.length > 0;
     var net = mine.length - against.length;
     card.dataset.for = JSON.stringify(mine);
@@ -805,9 +816,8 @@ JS = r"""
   }
 
   // Rest-of-season rank breaks ties. Unranked players carry a sentinel that
-  // sorts them last rather than dropping them.
-  // An NFL game runs about three hours. Past that it is history, so it sinks
-  // below anything still live or upcoming.
+  // sorts them last rather than dropping them. Once kickoff passes, the player
+  // is no longer actionable and always sorts after every unplayed player.
   var GAME_RUNTIME_MS = 3 * 60 * 60 * 1000;
 
   function kickoffMs(ts){
@@ -821,22 +831,36 @@ JS = r"""
     return k !== Infinity && Date.now() >= k + GAME_RUNTIME_MS;
   }
 
+  function hasPlayed(card){
+    if(card.dataset.locked === "1") return true;
+    var k = kickoffMs(card.dataset.ts);
+    return k !== Infinity && Date.now() >= k;
+  }
+
+  function playedOrder(a, b){
+    return Number(hasPlayed(a)) - Number(hasPlayed(b));
+  }
+
+  function playedLast(inner){
+    return function(a, b){ return playedOrder(a, b) || inner(a, b); };
+  }
+
   function byRank(a, b){
     return (+a.dataset.rank - +b.dataset.rank)
         || a.dataset.name.localeCompare(b.dataset.name);
   }
 
   var CMP = {
-    exp:  function(a,b){ return (+b.dataset.impact - +a.dataset.impact)
-                             || (+a.dataset.net - +b.dataset.net)
-                             || byRank(a,b); },
-    time: function(a,b){ return a.dataset.ts.localeCompare(b.dataset.ts)
-                             || byRank(a,b); },
-    name: function(a,b){ return a.dataset.name.localeCompare(b.dataset.name); },
-    rank: byRank,
-    pos:  function(a,b){ var o={QB:0,RB:1,WR:2,TE:3};
-                         return (o[a.dataset.pos]-o[b.dataset.pos])
-                             || a.dataset.name.localeCompare(b.dataset.name); }
+    exp:  playedLast(function(a,b){ return (+b.dataset.impact - +a.dataset.impact)
+                                        || (+a.dataset.net - +b.dataset.net)
+                                        || byRank(a,b); }),
+    time: playedLast(function(a,b){ return a.dataset.ts.localeCompare(b.dataset.ts)
+                                        || byRank(a,b); }),
+    name: playedLast(function(a,b){ return a.dataset.name.localeCompare(b.dataset.name); }),
+    rank: playedLast(byRank),
+    pos:  playedLast(function(a,b){ var o={QB:0,RB:1,WR:2,TE:3};
+                                    return (o[a.dataset.pos]-o[b.dataset.pos])
+                                        || a.dataset.name.localeCompare(b.dataset.name); })
   };
 
   function el(tag, cls, text){
@@ -915,10 +939,13 @@ JS = r"""
         if(!byWave[w]){ byWave[w] = []; order.push(w); }
         byWave[w].push(c);
       });
-      order.sort(function(a,b){ return byWave[a][0].dataset.ts.localeCompare(byWave[b][0].dataset.ts); });
+      order.sort(function(a,b){
+        return playedOrder(byWave[a][0], byWave[b][0])
+            || byWave[a][0].dataset.ts.localeCompare(byWave[b][0].dataset.ts);
+      });
       order.forEach(function(w){
         var els = byWave[w];
-        var shut = els[0].dataset.locked === "1";
+        var shut = hasPlayed(els[0]);
         stage.appendChild(group(w, els.length, "", els,
           { cls: shut ? "shut" : "open", text: shut ? "locked" : "still open" }));
       });
@@ -946,9 +973,7 @@ JS = r"""
         byGame[g].push(c);
       });
       gameOrder.sort(function(a,b){
-        var fa = isFinished(byGame[a][0].dataset.ts) ? 1 : 0;
-        var fb = isFinished(byGame[b][0].dataset.ts) ? 1 : 0;
-        return (fa - fb)
+        return playedOrder(byGame[a][0], byGame[b][0])
             || byGame[a][0].dataset.ts.localeCompare(byGame[b][0].dataset.ts)
             || a.localeCompare(b);
       });
@@ -975,7 +1000,8 @@ JS = r"""
       function bucketOrder(bucket){
         return function(a, b){
           if(sort !== "exp") return CMP[sort](a, b);
-          return (stakeIn(b, bucket) - stakeIn(a, bucket)) || byRank(a, b);
+          return playedOrder(a, b)
+              || (stakeIn(b, bucket) - stakeIn(a, bucket)) || byRank(a, b);
         };
       }
 
@@ -1073,11 +1099,16 @@ JS = r"""
     ];
     var groups = 0;
     tiers.forEach(function(t){
-      var els = all.filter(function(c){ return c.dataset.tier === t[0]; });
+      var els = all.filter(function(c){ return !hasPlayed(c) && c.dataset.tier === t[0]; });
       if(!els.length) return;
       groups += 1;
       stage.appendChild(group(t[1], els.length, t[2], els, null));
     });
+    var played = all.filter(hasPlayed);
+    if(played.length){
+      groups += 1;
+      stage.appendChild(group("Played", played.length, "Kickoff has passed.", played, null));
+    }
     if(!groups) empty("No players match this filter.");
   }
 
@@ -1176,21 +1207,21 @@ JS = r"""
     else label.textContent = Math.floor(mins / 60) + "h " + (mins % 60) + "m";
   }
   build();
-  // Rebuilding every minute would fight the user by collapsing games, so the
-  // tick only rebuilds when a game has actually crossed the finish mark.
-  function finishedSignature(){
+  // Rebuild only when a game crosses kickoff or the approximate final mark.
+  // That keeps played players at the bottom without needlessly disturbing UI.
+  function gameStateSignature(){
     return sourceCards.map(function(c){
-      return isFinished(c.dataset.ts) ? "1" : "0";
+      return isFinished(c.dataset.ts) ? "2" : (hasPlayed(c) ? "1" : "0");
     }).join("");
   }
-  var lastFinished = finishedSignature();
+  var lastGameState = gameStateSignature();
 
   updateCountdown();
   setInterval(function(){
     updateCountdown();
-    var now = finishedSignature();
-    if(now !== lastFinished){
-      lastFinished = now;
+    var now = gameStateSignature();
+    if(now !== lastGameState){
+      lastGameState = now;
       build();
     }
   }, 60000);
