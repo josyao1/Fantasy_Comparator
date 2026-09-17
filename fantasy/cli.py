@@ -52,13 +52,13 @@ def collect(week: int, season: str) -> list[LeagueMatchup]:
     return sorted(out, key=lambda m: m.priority)
 
 
-def scan(wave: schedule.Wave | None, now: datetime):
-    week, season = schedule.current_week()
+def scan(week: int, season: str, wave: schedule.Wave | None, now: datetime):
     matchups = collect(week, season)
     kickoffs = schedule.kickoff_by_team(season, week)
     table = ledger.build(matchups, kickoffs, now,
-                         schedule.game_by_team(season, week))
-    html = render.board(matchups, table, week, wave, now)
+                         schedule.game_by_team(season, week),
+                         schedule.final_games(season, week))
+    html = render.board(matchups, table, week, wave, now, season)
     config.OUT.mkdir(parents=True, exist_ok=True)
     path = config.OUT / "index.html"
     path.write_text(html, encoding="utf-8")
@@ -81,7 +81,8 @@ def main(argv=None) -> int:
         now = datetime.fromisoformat(args.as_of)
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
-    week, season = schedule.current_week()
+    _, season = schedule.current_week()
+    week = schedule.board_week(season, now)
 
     if args.command == "schedule":
         for w in _waves(season, week):
@@ -95,23 +96,27 @@ def main(argv=None) -> int:
     if args.as_of:
         upcoming = [w for w in _waves(season, week) if w.kickoff_dt > now]
         wave = upcoming[0] if upcoming else None
+    # Every run rebuilds the board so it tracks lineup changes all week; only
+    # the text waits for a kickoff wave.
+    send = args.command == "run" and not args.dry_run
     if args.command == "run" and not args.force:
         sent = state.load()
         waves = _waves(season, week)
         wave = schedule.due_wave(waves, now, config.LEAD_MINUTES, sent)
         if wave is None:
-            print("no wave due — exiting")
-            return 0
-        print(f"wave due: {wave.label} ({wave.key})")
+            print("no wave due — rebuilding the board without a text")
+            send = False
+        else:
+            print(f"wave due: {wave.label} ({wave.key})")
 
-    matchups, table, digest, path = scan(wave, now)
+    matchups, table, digest, path = scan(week, season, wave, now)
 
     for m in matchups:
         status = f"ERROR {m.error}" if m.error else f"{len(m.my_starters)}v{len(m.opp_starters)} vs {m.opp_team}"
         print(f"  [{m.platform:7s}] {m.league_name[:34]:34s} {status}")
     print(f"\nboard -> {path}\n\n{digest}")
 
-    if args.command == "run" and not args.dry_run:
+    if send:
         notify.send(digest)
         if wave is not None:
             state.mark(wave.key)

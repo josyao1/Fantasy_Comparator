@@ -40,7 +40,8 @@ class Exposure:
     for_leagues: list[str] = field(default_factory=list)
     against_leagues: list[str] = field(default_factory=list)
     kickoff: datetime | None = None
-    locked: bool = False
+    locked: bool = False      # kicked off: lineup slot can no longer change
+    final: bool = False       # ESPN reports his game over
     rank: int = 9999          # rest-of-season consensus; ties break on this
     game: str = ""            # "TB @ CIN" — the NFL game he plays in
 

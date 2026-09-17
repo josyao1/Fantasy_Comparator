@@ -466,7 +466,7 @@ def _card(e: Exposure) -> str:
         f' data-team="{_esc(e.player.team)}"'
         f' data-rank="{e.rank}" data-game="{_esc(e.game or "TBD")}"'
         f' data-wave="{_esc(wave)}" data-ts="{kick.isoformat() if kick else "9999"}"'
-        f' data-locked="{"1" if e.locked else "0"}"'
+        f' data-locked="{"1" if e.locked else "0"}" data-final="{"1" if e.final else "0"}"'
         f' data-against="{against_json}" data-for="{for_json}">'
         f'<button class="card-main" type="button" aria-expanded="false" '
         f'aria-label="Show why {_esc(e.player.name)} matters">'
@@ -486,18 +486,20 @@ def _group(title: str, count: int, sub: str, cards: str, empty: str) -> str:
 
 
 def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
-          wave, now: datetime) -> str:
+          wave, now: datetime, season: str = "") -> str:
     conf = ledger.conflicts(table)
     facing = [e for e in table.values() if e.against_leagues]
+    # A player only drops to the bottom once his game is over. Kickoff alone
+    # still locks the lineup slot, which the open count and countdown track.
     multi = sorted((e for e in facing if len(e.against_leagues) >= 2),
-                   key=lambda e: (e.locked, -len(e.against_leagues), e.player.name))
+                   key=lambda e: (e.final, -len(e.against_leagues), e.player.name))
     single = sorted((e for e in facing if len(e.against_leagues) == 1),
-                    key=lambda e: (e.locked, e.player.name))
-    played = sorted((e for e in facing if e.locked),
+                    key=lambda e: (e.final, e.player.name))
+    played = sorted((e for e in facing if e.final),
                     key=lambda e: (e.kickoff or datetime.max.replace(tzinfo=DISPLAY_TZ),
                                    e.player.name))
-    open_multi = [e for e in multi if not e.locked]
-    open_single = [e for e in single if not e.locked]
+    open_multi = [e for e in multi if not e.final]
+    open_single = [e for e in single if not e.final]
     open_n = sum(1 for e in facing if not e.locked)
     next_times = sorted(e.kickoff for e in facing if not e.locked and e.kickoff)
     next_at = next_times[0] if next_times else None
@@ -518,7 +520,7 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
                     "color": LEAGUES[m.league_name]["color"]} for m in ok]
     relevant = sorted(
         (e for e in table.values() if e.for_leagues or e.against_leagues),
-        key=lambda e: (e.locked, -len(e.against_leagues), e.player.name),
+        key=lambda e: (e.final, -len(e.against_leagues), e.player.name),
     )
     cheering = [e for e in relevant if e.for_leagues]
 
@@ -600,7 +602,7 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
                     "".join(_card(e) for e in open_single),
                     "No other skill starters against you."))
     if played:
-        p.append(_group("Played", len(played), "Kickoff has passed.",
+        p.append(_group("Played", len(played), "Game is final.",
                         "".join(_card(e) for e in played), ""))
     p.append('</div>')
     p.append('<template id="card-source">')
@@ -614,7 +616,7 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
     # League and team names are written by other league members, so they are
     # untrusted. json.dumps does not escape <, which would let a name
     # containing </script> break out of the block below.
-    data = (json.dumps({"leagues": league_meta})
+    data = (json.dumps({"leagues": league_meta, "season": season, "week": week})
             .replace("<", "\\u003c").replace(">", "\\u003e")
             .replace("&", "\\u0026").replace("\u2028", "\\u2028")
             .replace("\u2029", "\\u2029"))
@@ -636,7 +638,8 @@ JS = r"""
   // which are intentionally absent from the no-script Against fallback.
   var sourceCards = Array.prototype.slice.call(source.content.querySelectorAll(".card"))
     .map(function(c){ return c.cloneNode(true); });
-  var leagueMeta = JSON.parse(document.getElementById("meta").textContent).leagues;
+  var boardMeta = JSON.parse(document.getElementById("meta").textContent);
+  var leagueMeta = boardMeta.leagues;
   var scope = "against", view = "game", sort = "exp", filter = "all";
 
   function jsonList(card, key){
@@ -684,9 +687,9 @@ JS = r"""
     if(!belongs(mine, against, useScope)) return null;
 
     var card = sourceCard.cloneNode(true);
-    var played = hasPlayed(sourceCard);
-    card.dataset.locked = played ? "1" : "0";
-    card.classList.toggle("lk", played);
+    var locked = hasKickedOff(sourceCard);
+    card.dataset.locked = locked ? "1" : "0";
+    card.classList.toggle("lk", locked);
     var conflict = mine.length > 0 && against.length > 0;
     var net = mine.length - against.length;
     card.dataset.for = JSON.stringify(mine);
@@ -816,9 +819,16 @@ JS = r"""
   }
 
   // Rest-of-season rank breaks ties. Unranked players carry a sentinel that
-  // sorts them last rather than dropping them. Once kickoff passes, the player
-  // is no longer actionable and always sorts after every unplayed player.
-  var GAME_RUNTIME_MS = 3 * 60 * 60 * 1000;
+  // sorts them last rather than dropping them. A player sinks below everyone
+  // still to play only once his game is over; a game in progress stays put.
+  //
+  // "Over" comes from ESPN's live scoreboard, polled while any game is on.
+  // The build's own snapshot covers the moments before the first poll lands.
+  // Only if ESPN never answers does a deliberately late clock guess apply, so
+  // overtime or a weather delay cannot mark a game final while it is running.
+  var FALLBACK_FINAL_MS = 5 * 60 * 60 * 1000;
+  var POLL_MS = 2 * 60 * 1000;
+  var liveStatus = null;   // game label -> "pre" | "in" | "post"
 
   function kickoffMs(ts){
     if(!ts || ts === "9999") return Infinity;
@@ -826,15 +836,25 @@ JS = r"""
     return isNaN(t) ? Infinity : t;
   }
 
-  function isFinished(ts){
-    var k = kickoffMs(ts);
-    return k !== Infinity && Date.now() >= k + GAME_RUNTIME_MS;
-  }
-
-  function hasPlayed(card){
+  function hasKickedOff(card){
     if(card.dataset.locked === "1") return true;
     var k = kickoffMs(card.dataset.ts);
     return k !== Infinity && Date.now() >= k;
+  }
+
+  // true / false when ESPN has said, null when nothing is known yet.
+  function reportedFinal(card){
+    var game = card.dataset.game;
+    if(liveStatus && game in liveStatus) return liveStatus[game] === "post";
+    if(card.dataset.final === "1") return true;
+    return liveStatus ? false : null;
+  }
+
+  function hasPlayed(card){
+    var known = reportedFinal(card);
+    if(known !== null) return known;
+    var k = kickoffMs(card.dataset.ts);
+    return k !== Infinity && Date.now() >= k + FALLBACK_FINAL_MS;
   }
 
   function playedOrder(a, b){
@@ -945,7 +965,7 @@ JS = r"""
       });
       order.forEach(function(w){
         var els = byWave[w];
-        var shut = hasPlayed(els[0]);
+        var shut = hasKickedOff(els[0]);
         stage.appendChild(group(w, els.length, "", els,
           { cls: shut ? "shut" : "open", text: shut ? "locked" : "still open" }));
       });
@@ -1021,7 +1041,7 @@ JS = r"""
         var det = el("details", "game-grp");
         det.dataset.game = g;
         if(openGames.has(g)) det.open = true;
-        if(isFinished(els[0].dataset.ts)) det.classList.add("done");
+        if(hasPlayed(els[0])) det.classList.add("done");
         var sum = el("summary", null, null);
         sum.appendChild(gameTitle(g));
         sum.appendChild(el("span", "gtime", els[0].dataset.wave));
@@ -1040,7 +1060,7 @@ JS = r"""
           chip.setAttribute("aria-label", t[1] + " " + t[3]);
           tally.appendChild(chip);
         });
-        if(isFinished(els[0].dataset.ts)){
+        if(hasPlayed(els[0])){
           var fin = el("span", "gt final", "\u25CF");
           fin.title = "final"; fin.setAttribute("aria-label", "final");
           tally.appendChild(fin);
@@ -1107,7 +1127,7 @@ JS = r"""
     var played = all.filter(hasPlayed);
     if(played.length){
       groups += 1;
-      stage.appendChild(group("Played", played.length, "Kickoff has passed.", played, null));
+      stage.appendChild(group("Played", played.length, "Game is final.", played, null));
     }
     if(!groups) empty("No players match this filter.");
   }
@@ -1207,23 +1227,66 @@ JS = r"""
     else label.textContent = Math.floor(mins / 60) + "h " + (mins % 60) + "m";
   }
   build();
-  // Rebuild only when a game crosses kickoff or the approximate final mark.
-  // That keeps played players at the bottom without needlessly disturbing UI.
+  // Rebuild only when a game kicks off or goes final. That keeps played
+  // players at the bottom without needlessly disturbing the UI.
   function gameStateSignature(){
     return sourceCards.map(function(c){
-      return isFinished(c.dataset.ts) ? "2" : (hasPlayed(c) ? "1" : "0");
+      return hasPlayed(c) ? "2" : (hasKickedOff(c) ? "1" : "0");
     }).join("");
   }
   var lastGameState = gameStateSignature();
 
-  updateCountdown();
-  setInterval(function(){
-    updateCountdown();
+  function refreshIfChanged(){
     var now = gameStateSignature();
     if(now !== lastGameState){
       lastGameState = now;
       build();
     }
+  }
+
+  // Poll only while a game may be live: it kicked off within the last day and
+  // ESPN has not yet called it. Otherwise the board makes no network requests.
+  var LIVE_WINDOW_MS = 24 * 60 * 60 * 1000;
+  var lastPoll = 0;
+  function gameLive(){
+    return sourceCards.some(function(c){
+      return hasKickedOff(c) && reportedFinal(c) !== true
+          && Date.now() < kickoffMs(c.dataset.ts) + LIVE_WINDOW_MS;
+    });
+  }
+  function pollScores(){
+    if(!boardMeta.season || !boardMeta.week) return;
+    if(!gameLive() || Date.now() - lastPoll < POLL_MS) return;
+    lastPoll = Date.now();
+    fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" +
+          "?dates=" + encodeURIComponent(boardMeta.season) + "&seasontype=2&week=" +
+          encodeURIComponent(boardMeta.week), { cache: "no-store" })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){
+        if(!data || !data.events) return;
+        var status = {};
+        data.events.forEach(function(ev){
+          var comp = (ev.competitions || [])[0] || {};
+          var away = "?", home = "?";
+          (comp.competitors || []).forEach(function(c){
+            var abbr = (c.team && c.team.abbreviation) || "?";
+            if(c.homeAway === "home") home = abbr; else away = abbr;
+          });
+          var type = (comp.status && comp.status.type) || {};
+          status[away + " @ " + home] = type.completed ? "post" : (type.state || "pre");
+        });
+        liveStatus = status;
+        refreshIfChanged();
+      })
+      .catch(function(){});
+  }
+
+  updateCountdown();
+  pollScores();
+  setInterval(function(){
+    updateCountdown();
+    refreshIfChanged();
+    pollScores();
   }, 60000);
 })();
 """

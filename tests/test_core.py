@@ -206,8 +206,20 @@ def test_every_sort_and_grouping_keeps_played_players_at_the_bottom():
     assert "return playedOrder(byWave[a][0], byWave[b][0])" in render.JS
     assert "return playedOrder(byGame[a][0], byGame[b][0])" in render.JS
     assert 'var played = all.filter(hasPlayed);' in render.JS
-    assert 'group("Played", played.length, "Kickoff has passed."' in render.JS
-    assert 'return isFinished(c.dataset.ts) ? "2" : (hasPlayed(c) ? "1" : "0");' in render.JS
+    assert 'group("Played", played.length, "Game is final."' in render.JS
+    assert 'return hasPlayed(c) ? "2" : (hasKickedOff(c) ? "1" : "0");' in render.JS
+
+
+def test_played_means_espn_called_the_game_not_that_it_kicked_off():
+    played = render.JS.split("function hasPlayed(card){")[1].split("\n  }")[0]
+    # Live status and the build snapshot win; the clock is only a last resort.
+    assert "reportedFinal(card)" in played
+    assert "FALLBACK_FINAL_MS" in played
+    assert "var FALLBACK_FINAL_MS = 5 * 60 * 60 * 1000;" in render.JS
+    assert "GAME_RUNTIME_MS" not in render.JS
+    # Lineup lock still follows kickoff.
+    assert "var locked = hasKickedOff(sourceCard);" in render.JS
+    assert 'type.completed ? "post"' in render.JS
 
 
 def test_no_script_fallback_also_puts_played_players_last(monkeypatch):
@@ -216,15 +228,79 @@ def test_no_script_fallback_also_puts_played_players_last(monkeypatch):
         _matchup("L1", [], [CHASE, CMC]),
         _matchup("L2", [], [CHASE]),
     ]
-    table = ledger.build(
-        matchups,
-        {"CIN": NOW - timedelta(minutes=1), "SF": NOW + timedelta(hours=1)},
-        NOW,
-    )
+    kicks = {"CIN": NOW - timedelta(hours=4), "SF": NOW - timedelta(hours=1)}
+    games = {"CIN": "TB @ CIN", "SF": "SF @ SEA"}
+    table = ledger.build(matchups, kicks, NOW, games, finals={"TB @ CIN"})
     html = render.board(matchups, table, 1, None, NOW)
     stage = html.split('<div id="stage">')[1].split('<template id="card-source">')[0]
     assert stage.index('data-name="Christian McCaffrey"') < stage.index("data-name=\"Ja&#x27;Marr Chase\"")
     assert "<h2>Played " in stage
+
+
+def test_game_in_progress_is_not_played(monkeypatch):
+    monkeypatch.setattr(render, "url_for", lambda *_: None)
+    matchups = [_matchup("L1", [], [CHASE])]
+    # Kicked off four hours ago, but ESPN has not called it: overtime, delays.
+    table = ledger.build(matchups, {"CIN": NOW - timedelta(hours=4)}, NOW,
+                         {"CIN": "TB @ CIN"}, finals=set())
+    assert table[CHASE.key].locked is True
+    assert table[CHASE.key].final is False
+    stage = render.board(matchups, table, 1, None, NOW).split('<div id="stage">')[1] \
+        .split('<template id="card-source">')[0]
+    assert "<h2>Played " not in stage
+
+
+def test_sleeper_washington_players_find_their_game():
+    commanders = Player("Jayden Daniels", "QB", "WAS")
+    kick = NOW + timedelta(hours=2)
+    table = ledger.build([_matchup("L1", [], [commanders])], {"WAS": kick}, NOW,
+                         {"WAS": "WSH @ PHI"})
+    assert table[commanders.key].kickoff == kick
+    assert table[commanders.key].game == "WSH @ PHI"
+
+
+def _game(kickoff, away="TB", home="CIN"):
+    return schedule.Game(kickoff=kickoff.isoformat(), away=away, home=home,
+                         short_name=f"{away} @ {home}")
+
+
+def test_board_rolls_to_next_week_after_monday_night(monkeypatch):
+    mnf = datetime(2026, 9, 15, 0, 15, tzinfo=UTC)     # Mon 5:15pm PT
+    weeks = {1: [_game(mnf - timedelta(days=3)), _game(mnf)],
+             2: [_game(mnf + timedelta(days=3)), _game(mnf + timedelta(days=7))]}
+    monkeypatch.setattr(schedule, "load_schedule", lambda season: weeks)
+    assert schedule.board_week("2026", mnf + timedelta(hours=3)) == 1
+    tuesday_morning = datetime(2026, 9, 15, 11, 0, tzinfo=UTC)   # 4am PT
+    assert schedule.board_week("2026", tuesday_morning) == 2
+
+
+def test_only_completed_games_count_as_final(monkeypatch):
+    def event(away, home, completed, state):
+        return {"competitions": [{
+            "competitors": [{"homeAway": "away", "team": {"abbreviation": away}},
+                            {"homeAway": "home", "team": {"abbreviation": home}}],
+            "status": {"type": {"completed": completed, "state": state}}}]}
+    monkeypatch.setattr(schedule, "_scoreboard", lambda season, week: [
+        event("TB", "CIN", True, "post"),
+        event("MIA", "LV", False, "in"),
+        event("GB", "MIN", False, "pre"),
+    ])
+    assert schedule.final_games("2026", 1) == {"TB @ CIN"}
+
+
+def test_every_scheduled_run_rebuilds_the_board_but_texts_only_when_due(monkeypatch):
+    from fantasy import cli
+    built, sent = [], []
+    monkeypatch.setattr(cli.schedule, "current_week", lambda: (2, "2026"))
+    monkeypatch.setattr(cli.schedule, "board_week", lambda season, now: 2)
+    monkeypatch.setattr(cli, "_waves", lambda season, week: [])
+    monkeypatch.setattr(cli.state, "load", lambda: set())
+    monkeypatch.setattr(cli, "scan", lambda week, season, wave, now:
+                        built.append(week) or ([], {}, "digest", "out/index.html"))
+    monkeypatch.setattr(cli.notify, "send", sent.append)
+    assert cli.main(["run"]) == 0
+    assert built == [2]
+    assert sent == []
 
 
 def test_league_toggles_recompute_exposure_instead_of_only_hiding_cards():

@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 from . import config
+from .crosswalk import normalize_team
 
 ET = ZoneInfo("America/New_York")  # NFL game-day grouping stays league-standard.
 DISPLAY_TZ = ZoneInfo(config.DISPLAY_TIMEZONE)
@@ -27,6 +28,10 @@ STATE_URL = "https://api.sleeper.app/v1/state/nfl"
 CACHE = config.DATA / "schedule.json"
 CACHE_TTL_SECONDS = 6 * 3600
 REGULAR_SEASON_WEEKS = 18
+# How long after a week's last kickoff the board rolls to the next week. Monday
+# night kicks off around 00:15 UTC Tuesday, so this flips overnight Monday and
+# the first Tuesday morning run already builds next week's board.
+WEEK_ROLLOVER = timedelta(hours=8)
 
 
 @dataclass(frozen=True)
@@ -80,23 +85,32 @@ def current_week() -> tuple[int, str]:
     return int(state["week"]), str(state["season"])
 
 
-def _fetch_week(season: str, week: int) -> list[Game]:
+def _scoreboard(season: str, week: int) -> list[dict]:
     r = requests.get(
         SCOREBOARD,
         params={"dates": season, "seasontype": 2, "week": week},
         timeout=25,
     )
     r.raise_for_status()
+    return r.json().get("events", [])
+
+
+def _teams(event: dict) -> tuple[str, str]:
+    competitors = event.get("competitions", [{}])[0].get("competitors", [])
+    away = home = "?"
+    for c in competitors:
+        abbr = c.get("team", {}).get("abbreviation", "?")
+        if c.get("homeAway") == "home":
+            home = abbr
+        else:
+            away = abbr
+    return away, home
+
+
+def _fetch_week(season: str, week: int) -> list[Game]:
     games = []
-    for event in r.json().get("events", []):
-        competitors = event.get("competitions", [{}])[0].get("competitors", [])
-        away = home = "?"
-        for c in competitors:
-            abbr = c.get("team", {}).get("abbreviation", "?")
-            if c.get("homeAway") == "home":
-                home = abbr
-            else:
-                away = abbr
+    for event in _scoreboard(season, week):
+        away, home = _teams(event)
         kickoff = datetime.strptime(event["date"], "%Y-%m-%dT%H:%MZ").replace(
             tzinfo=timezone.utc
         )
@@ -140,6 +154,41 @@ def load_schedule(season: str, force: bool = False) -> dict[int, list[Game]]:
     return weeks
 
 
+def board_week(season: str, now: datetime) -> int:
+    """The week the board should show: the first one not yet played out.
+
+    Sleeper moves its week counter on its own timetable, but both platforms
+    already serve next week's lineups, so the board rolls over as soon as
+    Monday night is done rather than waiting for it.
+    """
+    weeks = load_schedule(season)
+    for week in range(1, REGULAR_SEASON_WEEKS + 1):
+        games = weeks.get(week, [])
+        if games and max(g.kickoff_dt for g in games) + WEEK_ROLLOVER > now:
+            return week
+    return REGULAR_SEASON_WEEKS
+
+
+def final_games(season: str, week: int) -> set[str]:
+    """Labels of games ESPN reports as final, e.g. {"TB @ CIN"}.
+
+    Deliberately uncached: the schedule cache is hours old by design, and a
+    game only counts as over once ESPN says so, overtime and delays included.
+    A failed fetch reports nothing final rather than guessing.
+    """
+    try:
+        events = _scoreboard(season, week)
+    except requests.RequestException:
+        return set()
+    out = set()
+    for event in events:
+        status = event.get("competitions", [{}])[0].get("status", {})
+        if status.get("type", {}).get("completed"):
+            away, home = _teams(event)
+            out.add(f"{away} @ {home}")
+    return out
+
+
 def waves_for_week(season: str, week: int, force: bool = False) -> list[Wave]:
     """Distinct kickoff times in a week, each with its games, in time order."""
     games = load_schedule(season, force=force).get(week, [])
@@ -180,16 +229,19 @@ def game_by_team(season: str, week: int) -> dict[str, str]:
     for game in load_schedule(season).get(week, []):
         label = f"{game.away} @ {game.home}"
         for team in game.teams:
-            out[team] = label
+            out[normalize_team(team)] = label
     return out
 
 
 def kickoff_by_team(season: str, week: int) -> dict[str, datetime]:
-    """Map each NFL team abbreviation to its kickoff — drives per-player lock state."""
+    """Map each NFL team abbreviation to its kickoff — drives per-player lock state.
+
+    Keys are normalized: the schedule says WSH, Sleeper players say WAS.
+    """
     out: dict[str, datetime] = {}
     for game in load_schedule(season).get(week, []):
         for team in game.teams:
-            out[team] = game.kickoff_dt
+            out[normalize_team(team)] = game.kickoff_dt
     return out
 
 

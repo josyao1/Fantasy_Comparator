@@ -7,13 +7,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from .crosswalk import normalize_team
 from .models import Exposure, LeagueMatchup
 from .rankings import rank_for
 from . import config
 
 
 def build(matchups: list[LeagueMatchup], kickoffs: dict[str, datetime],
-          now: datetime, games: dict[str, str] | None = None) -> dict[str, Exposure]:
+          now: datetime, games: dict[str, str] | None = None,
+          finals: set[str] | None = None) -> dict[str, Exposure]:
     """Collapse every league's lineups into one exposure table keyed by player."""
     table: dict[str, Exposure] = {}
 
@@ -22,13 +24,16 @@ def build(matchups: list[LeagueMatchup], kickoffs: dict[str, datetime],
             return
         exp = table.get(player.key)
         if exp is None:
-            kickoff = kickoffs.get(player.team)
+            team = normalize_team(player.team)
+            kickoff = kickoffs.get(team)
+            game = (games or {}).get(team, "")
             exp = Exposure(
                 player=player,
                 kickoff=kickoff,
                 locked=bool(kickoff and now >= kickoff),
+                final=bool(game) and game in (finals or set()),
                 rank=rank_for(player.name, player.position),
-                game=(games or {}).get(player.team, ""),
+                game=game,
             )
             table[player.key] = exp
         target = exp.for_leagues if side == "for" else exp.against_leagues
