@@ -21,6 +21,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from . import config, ledger
+from .crosswalk import normalize_team
 from .headshots import rail_color, url_for
 from .leagues import assign as assign_leagues
 from .rankings import UNRANKED, label as rank_label
@@ -571,7 +572,8 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
           '<option value="name">Name</option><option value="pos">Position</option></select></label>',
           '<label class="select-control"><span>Show</span><select data-filter-select aria-label="Filter players">'
           '<option value="all">All</option><option value="open">Open</option><option value="QB">QB</option>'
-          '<option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option></select></label>',
+          '<option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option>'
+          '<option value="K">K</option><option value="DST">D/ST</option></select></label>',
           '<label class="thin-toggle"><input type="checkbox" data-thin-check>'
           '<span>Slim</span></label></div>',
           '<div class="filter-drawers">',
@@ -600,7 +602,7 @@ def board(matchups: list[LeagueMatchup], table: dict[str, Exposure], week: int,
                     "Nobody is facing you in two leagues."))
     p.append(_group("Facing", len(open_single), "",
                     "".join(_card(e) for e in open_single),
-                    "No other skill starters against you."))
+                    "No other starters against you."))
     if played:
         p.append(_group("Played", len(played), "Game is final.",
                         "".join(_card(e) for e in played), ""))
@@ -878,7 +880,7 @@ JS = r"""
                                         || byRank(a,b); }),
     name: playedLast(function(a,b){ return a.dataset.name.localeCompare(b.dataset.name); }),
     rank: playedLast(byRank),
-    pos:  playedLast(function(a,b){ var o={QB:0,RB:1,WR:2,TE:3};
+    pos:  playedLast(function(a,b){ var o={QB:0,RB:1,WR:2,TE:3,K:4,DST:5};
                                     return (o[a.dataset.pos]-o[b.dataset.pos])
                                         || a.dataset.name.localeCompare(b.dataset.name); })
   };
@@ -1299,13 +1301,18 @@ def sms_text(table: dict[str, Exposure], week: int, wave, matchups) -> str:
     facing = [e for e in table.values() if e.against_leagues]
     label = wave.label if wave else "now"
 
+    def digest_name(e: Exposure) -> str:
+        if e.player.position == "DST":
+            return f"{normalize_team(e.player.team)} D/ST"
+        return e.player.name.split()[-1]
+
     lines = [f"FM W{week} {label}", f"Facing {len(facing)}"]
     if multi:
-        names = ", ".join(e.player.name.split()[-1] for e in multi[:3])
+        names = ", ".join(digest_name(e) for e in multi[:3])
         lines.append(f"x2+: {names}")
     for e in conf[:2]:
         stake = "EVEN" if e.net == 0 else f"{e.net:+d}"
-        lines.append(f"! {e.player.name.split()[-1]} {stake}")
+        lines.append(f"! {digest_name(e)} {stake}")
     for m in [x for x in matchups if x.error]:
         why = "AUTH" if ("sign-in" in m.error or "private" in m.error) else "FAIL"
         lines.append(f"[{why}] {m.league_name}")

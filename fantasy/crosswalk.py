@@ -49,4 +49,7 @@ def normalize_name(name: str | None) -> str:
 
 def player_key(name: str | None, position: str | None, team: str | None) -> str:
     """Stable cross-platform identity for one player."""
+    if (position or "").upper() == "DST":
+        # Providers use different names for the same team's defense.
+        return f"dst|DST|{normalize_team(team)}"
     return f"{normalize_name(name)}|{(position or '').upper()}|{normalize_team(team)}"

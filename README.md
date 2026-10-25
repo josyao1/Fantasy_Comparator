@@ -13,9 +13,9 @@ and sometimes you are starting the guy you are also playing against.
 |---|---|
 | **Divided** | You start him *and* face him. Shows the net stake: start in 1, face in 2 → `−1`. |
 | **Doubled up** | He is in more than one opposing lineup at the same time. One big game costs you several matchups. |
-| **By league** | Every skill starter lined up against you, with kickoff time and lock state. |
+| **By league** | Every starter lined up against you, with kickoff time and lock state. |
 
-Scope is QB / RB / WR / TE, starters only.
+Scope is QB / RB / WR / TE / K / D/ST, starters only.
 
 ## How the schedule works
 
@@ -162,6 +162,9 @@ about 64% of startable skill players, including Bijan Robinson, Ja'Marr Chase
 and Puka Nacua. Players are therefore keyed on normalized
 `(name, position, team)`, which was measured to produce **zero collisions**
 across the startable universe.
+
+Team defenses are keyed by normalized NFL team, with Sleeper's `DEF` mapped
+to `DST`, so provider-specific defense names still count as one exposure.
 
 Two normalizations are load-bearing: ESPN says `WSH` where Sleeper says `WAS`,
 and Sleeper still emits legacy `OAK`. Without those, every Washington player

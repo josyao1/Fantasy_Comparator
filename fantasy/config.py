@@ -8,7 +8,7 @@ OUT = ROOT / "out"
 
 # ESPN's fantasy lineup slots that mean "not started".
 BENCH_SLOTS = {20, 21}
-SKILL_POSITIONS = ("QB", "RB", "WR", "TE")
+SCAN_POSITIONS = ("QB", "RB", "WR", "TE", "K", "DST")
 
 
 def _load_dotenv() -> None:

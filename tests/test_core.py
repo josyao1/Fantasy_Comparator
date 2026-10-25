@@ -77,9 +77,76 @@ def test_multi_exposure_excludes_conflicts():
     assert [e.player.name for e in ledger.conflicts(table)] == ["Christian McCaffrey"]
 
 
-def test_kickers_are_excluded_from_skill_scope():
-    table = ledger.build([_matchup("L1", [], [KICKER])], {}, NOW)
-    assert table == {}
+def test_kickers_contribute_to_conflicts_and_multi_exposure():
+    table = ledger.build([
+        _matchup("L1", [], [KICKER]),
+        _matchup("L2", [], [KICKER]),
+    ], {"CIN": NOW + timedelta(hours=2)}, NOW)
+    assert [e.player.name for e in ledger.multi_exposure(table)] == ["Evan McPherson"]
+    table = ledger.build([
+        _matchup("L1", [KICKER], []),
+        _matchup("L2", [], [KICKER]),
+    ], {}, NOW)
+    assert ledger.conflicts(table)[0].net == 0
+
+
+def test_defenses_match_across_platforms_and_keep_game_state():
+    from fantasy.adapters.sleeper import _to_player
+
+    sleeper_defense = _to_player("WAS", {"WAS": {
+        "first_name": "Washington", "last_name": "Commanders",
+        "position": "DEF", "team": "WAS",
+    }})
+    espn_defense = Player("Commanders D/ST", "DST", "WSH")
+    other_defense = Player("Seahawks D/ST", "DST", "SEA")
+    table = ledger.build([
+        _matchup("L1", [espn_defense], [other_defense]),
+        _matchup("L2", [], [sleeper_defense]),
+        _matchup("L3", [], [sleeper_defense]),
+    ], {"WAS": NOW - timedelta(hours=4)}, NOW,
+        {"WAS": "WAS @ NYG"}, {"WAS @ NYG"})
+    assert len(table) == 2
+    exp = ledger.conflicts(table)[0]
+    assert exp.for_leagues == ["L1"]
+    assert exp.against_leagues == ["L2", "L3"]
+    assert exp.net == -1
+    assert exp.locked is True
+    assert exp.final is True
+    assert exp.game == "WAS @ NYG"
+    assert sleeper_defense.position == "DST"
+
+
+def test_individual_defensive_players_remain_out_of_scope():
+    linebacker = Player("Fred Warner", "LB", "SF")
+    assert ledger.build([_matchup("L1", [], [linebacker])], {}, NOW) == {}
+
+
+def test_digest_identifies_defense_teams_in_both_highlight_tiers():
+    defense = Player("Commanders D/ST", "DST", "WSH")
+    matchups = [_matchup("L1", [], [defense]), _matchup("L2", [], [defense])]
+    table = ledger.build(matchups, {}, NOW)
+    assert "x2+: WAS D/ST" in render.sms_text(table, 1, None, matchups)
+    matchups.append(_matchup("L3", [defense], []))
+    table = ledger.build(matchups, {}, NOW)
+    assert "! WAS D/ST -1" in render.sms_text(table, 1, None, matchups)
+
+
+def test_board_includes_kickers_and_defenses_with_position_filters(monkeypatch):
+    from fantasy import headshots
+
+    monkeypatch.setattr(headshots, "_index", None)
+    monkeypatch.setattr(headshots, "load_players", lambda: {
+        "kicker-id": {"full_name": "Evan McPherson", "position": "K"},
+    })
+    defense = Player("Bengals D/ST", "DST", "CIN")
+    matchups = [_matchup("L1", [], [KICKER, defense])]
+    table = ledger.build(matchups, {}, NOW)
+    html = render.board(matchups, table, 1, None, NOW)
+    assert 'data-name="Evan McPherson" data-pos="K"' in html
+    assert 'data-name="Bengals D/ST" data-pos="DST"' in html
+    assert "players/thumb/kicker-id.jpg" in html
+    assert '<option value="K">K</option>' in html
+    assert '<option value="DST">D/ST</option>' in html
 
 
 def test_lock_state_follows_kickoff():

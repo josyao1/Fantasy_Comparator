@@ -37,9 +37,10 @@ def _to_player(pid: str, players: dict) -> Player | None:
     name = p.get("full_name") or " ".join(
         x for x in (p.get("first_name"), p.get("last_name")) if x
     )
+    position = (p.get("position") or "").upper()
     return Player(
         name=name,
-        position=(p.get("position") or "").upper(),
+        position="DST" if position == "DEF" else position,
         team=(p.get("team") or "FA"),
     )
 

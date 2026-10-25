@@ -1,6 +1,6 @@
 """Player headshots and team colours for the broadcast board.
 
-Sleeper's CDN carries a portrait for every skill player we surface, including
+Sleeper's CDN carries portraits for skill players and kickers, including
 the ones ESPN has no id for, so it is the single source rather than falling
 back between two providers.
 """
@@ -24,7 +24,7 @@ def _build_index() -> dict[tuple[str, str], str]:
     for pid, p in load_players().items():
         name = p.get("full_name")
         pos = (p.get("position") or "").upper()
-        if name and pos in config.SKILL_POSITIONS:
+        if name and pos in config.SCAN_POSITIONS and pos != "DST":
             idx.setdefault((normalize_name(name), pos), pid)
     return idx
 

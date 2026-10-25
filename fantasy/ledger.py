@@ -20,7 +20,7 @@ def build(matchups: list[LeagueMatchup], kickoffs: dict[str, datetime],
     table: dict[str, Exposure] = {}
 
     def touch(player, league_name: str, side: str) -> None:
-        if player.position not in config.SKILL_POSITIONS:
+        if player.position not in config.SCAN_POSITIONS:
             return
         exp = table.get(player.key)
         if exp is None:
