@@ -145,8 +145,25 @@ def test_board_includes_kickers_and_defenses_with_position_filters(monkeypatch):
     assert 'data-name="Evan McPherson" data-pos="K"' in html
     assert 'data-name="Bengals D/ST" data-pos="DST"' in html
     assert "players/thumb/kicker-id.jpg" in html
+    assert 'class="ph team-logo"' in html
+    assert 'src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/cin.png"' in html
     assert '<option value="K">K</option>' in html
     assert '<option value="DST">D/ST</option>' in html
+
+
+def test_defense_logos_use_normalized_team_without_loading_player_headshots(monkeypatch):
+    from fantasy import headshots
+
+    def unexpected_player_lookup():
+        raise AssertionError("A team logo should not load the player database")
+
+    monkeypatch.setattr(headshots, "_index", None)
+    monkeypatch.setattr(headshots, "load_players", unexpected_player_lookup)
+    for team, slug in [("WAS", "wsh"), ("WSH", "wsh"), ("LA", "lar"), ("CIN", "cin")]:
+        assert headshots.url_for("Defense", "DST", team) == (
+            f"https://a.espncdn.com/i/teamlogos/nfl/500-dark/{slug}.png"
+        )
+    assert headshots.url_for("Unknown", "DST", "FA") is None
 
 
 def test_lock_state_follows_kickoff():

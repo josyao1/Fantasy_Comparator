@@ -1,4 +1,4 @@
-"""Player headshots and team colours for the broadcast board.
+"""Player headshots, defense logos and team colours for the broadcast board.
 
 Sleeper's CDN carries portraits for skill players and kickers, including
 the ones ESPN has no id for, so it is the single source rather than falling
@@ -10,7 +10,7 @@ import json
 
 from . import config
 from .adapters.sleeper import load_players
-from .crosswalk import normalize_name
+from .crosswalk import normalize_name, normalize_team
 
 CDN = "https://sleepercdn.com/content/nfl/players/thumb/{pid}.jpg"
 COLORS = config.DATA / "team_colors.json"
@@ -29,7 +29,13 @@ def _build_index() -> dict[tuple[str, str], str]:
     return idx
 
 
-def url_for(name: str, position: str) -> str | None:
+def url_for(name: str, position: str, team: str | None = None) -> str | None:
+    if (position or "").upper() == "DST":
+        team = normalize_team(team)
+        if team == "FA":
+            return None
+        slug = "wsh" if team == "WAS" else team.lower()
+        return f"https://a.espncdn.com/i/teamlogos/nfl/500-dark/{slug}.png"
     global _index
     if _index is None:
         _index = _build_index()

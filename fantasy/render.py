@@ -298,6 +298,7 @@ button:focus-visible{outline:3px solid var(--for);outline-offset:2px}
   color:inherit;background:transparent;border:0;cursor:pointer}
 .card .ph,.card .noph{width:100%;height:100%;min-height:76px;background:var(--surface2)}
 .card .ph{object-fit:cover;object-position:top center;align-self:stretch}
+.card .ph.team-logo{object-fit:contain;object-position:center;padding:6px}
 .card .noph{display:flex;align-items:center;justify-content:center;font:800 22px/1 var(--display);color:var(--faint)}
 .card .body{padding:9px 6px 8px 10px}.nm{font-family:var(--display);font-size:21px;font-weight:800;line-height:1.02}
 .mt{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;line-height:1.25;
@@ -325,6 +326,7 @@ button:focus-visible{outline:3px solid var(--for);outline-offset:2px}
 body.thin .card{margin-bottom:3px}
 body.thin .card-main{grid-template-columns:32px minmax(0,1fr) auto;min-height:38px;cursor:default}
 body.thin .card .ph,body.thin .card .noph{min-height:38px;height:38px}
+body.thin .card .ph.team-logo{padding:3px}
 body.thin .card .noph{font-size:13px}
 body.thin .card .body{display:flex;align-items:center;gap:5px;min-width:0;padding:4px 6px}
 body.thin .nm{flex:1;min-width:55px;font-size:0;line-height:1;white-space:nowrap}
@@ -426,12 +428,13 @@ def _card(e: Exposure) -> str:
         sides += (f'<div class="stake-row"><span class="stake-kind against">Against</span>'
                   f'{chips(e.against_leagues)}</div>')
 
-    src = url_for(e.player.name, e.player.position)
+    src = url_for(e.player.name, e.player.position, e.player.team)
     initials = "".join(p[0] for p in e.player.name.split()[:2]).upper()
     name_parts = e.player.name.split()
     short_name = (f'{name_parts[0][0]}. {" ".join(name_parts[1:])}'
                   if len(name_parts) > 1 else e.player.name)
-    photo = (f'<img class="ph" src="{_esc(src)}" alt="" loading="lazy" '
+    photo_class = "ph team-logo" if e.player.position == "DST" else "ph"
+    photo = (f'<img class="{photo_class}" src="{_esc(src)}" alt="" loading="lazy" '
              f'onerror="this.outerHTML=\'<div class=&quot;noph&quot;>{_esc(initials)}</div>\'">'
              if src else f'<div class="noph">{_esc(initials)}</div>')
 
